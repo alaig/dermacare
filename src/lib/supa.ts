@@ -28,7 +28,9 @@ function sendError(msg: string) {
   if (/rate limit|too many|seconds/i.test(msg)) return 'محاولات كثيرة، انتظري دقيقة وحاولي مجددًا';
   if (/phone provider/i.test(msg)) return 'خدمة الرسائل غير مفعّلة حاليًا، تواصلي مع المركز للحجز';
   if (/60200|invalid parameter `?to/i.test(msg)) return 'رقم الهاتف غير صالح، تأكدي منه';
-  return `تعذّر إرسال رسالة التحقق. (${msg})`;
+  if (/21608|compliance profile|unverified/i.test(msg)) return 'خدمة الرسائل قيد التفعيل حاليًا. للحجز تواصلي مع المركز هاتفيًا أو عبر واتساب';
+  console.error('OTP send failed:', msg);
+  return 'تعذّر إرسال رسالة التحقق، حاولي بعد قليل أو تواصلي مع المركز';
 }
 
 const mapT = (r: any): Treatment => ({ id: r.id, name: r.name, durationMin: r.duration_min, price: r.price, active: r.active });
