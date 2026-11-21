@@ -7,6 +7,7 @@ const P = (d: ReactNode) => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{d}</svg>
 );
 export const Icon = {
+  chart: P(<><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></>),
   home: P(<><path d="M3 10.5 12 3l9 7.5" /><path d="M5 9.5V20h14V9.5" /><path d="M10 20v-5h4v5" /></>),
   plus: P(<><path d="M12 5v14M5 12h14" /></>),
   calendar: P(<><rect x="3" y="4.5" width="18" height="16" rx="3" /><path d="M3 9.5h18M8 3v3M16 3v3" /></>),

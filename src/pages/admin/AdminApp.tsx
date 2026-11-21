@@ -4,6 +4,7 @@ import { api } from '../../lib/api';
 import type { Settings } from '../../lib/types';
 import { Icon, TabBar } from '../../components/ui';
 import Agenda from './Agenda';
+import Overview from './Overview';
 import Clients from './Clients';
 import AdminMessages from './AdminMessages';
 import AdminSettings from './AdminSettings';
@@ -29,7 +30,8 @@ export default function AdminApp() {
     <C.Provider value={{ settings, setSettings, signOut }}>
       <div className="app">
         <Routes>
-          <Route index element={<Agenda />} />
+          <Route index element={<Overview />} />
+          <Route path="agenda" element={<Agenda />} />
           <Route path="clients" element={<Clients />} />
           <Route path="messages" element={<AdminMessages />} />
           <Route path="settings" element={<AdminSettings />} />
@@ -38,7 +40,8 @@ export default function AdminApp() {
       </div>
       <TabBar
         tabs={[
-          { to: '/admin', label: 'المواعيد', icon: Icon.calendar, end: true },
+          { to: '/admin', label: 'نظرة عامة', icon: Icon.chart, end: true },
+          { to: '/admin/agenda', label: 'المواعيد', icon: Icon.calendar },
           { to: '/admin/clients', label: 'الزبائن', icon: Icon.users },
           { to: '/admin/messages', label: 'الرسائل', icon: Icon.chat },
           { to: '/admin/settings', label: 'الإعدادات', icon: Icon.settings },

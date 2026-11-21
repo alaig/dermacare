@@ -4,7 +4,7 @@ import type { Api, Appointment, AppointmentFull, Client, ClientWithStats, Messag
 import { addDays, startOfDay } from './time';
 import { BIRTHDAY_DEFAULTS, isBirthdayToday, renderGreeting, todayKey } from './birthday';
 
-const KEY = 'dermacare-demo-v3';
+const KEY = 'dermacare-demo-v4';
 const uid = () => Math.random().toString(36).slice(2, 10);
 
 interface DB {
@@ -77,6 +77,29 @@ function seed(): DB {
   mk('c2', 't2', 1, 11, 'booked');
   mk('c3', 't3', 1, 14, 'booked');
   mk('c4', 't5', 2, 10, 'pending');
+  // a fuller month so the overview charts have something to show
+  const hoursPattern = [10, 11, 12, 15, 16, 17, 18, 11, 16, 17];
+  const treatPattern = ['t1', 't1', 't2', 't1', 't3', 't4', 't1', 't2', 't5', 't1', 't3'];
+  const who = ['c1', 'c2', 'c3'];
+  let k = 0;
+  for (let off = -28; off <= 30; off++) {
+    const day = addDays(now, off);
+    if (day.getDay() === 6) continue; // closed on Saturday
+    const per = 1 + ((off + 40) % 3);
+    for (let j = 0; j < per; j++, k++) {
+      const h = hoursPattern[k % hoursPattern.length];
+      if (day.getDay() === 5 && h >= 14) continue;
+      const st = new Date(startOfDay(day)); st.setHours(h, 0, 0, 0);
+      const t = treatments.find((x) => x.id === treatPattern[k % treatPattern.length])!;
+      const en = new Date(st.getTime() + t.durationMin * 60_000);
+      if (appointments.some((a) => st < new Date(a.end) && en > new Date(a.start))) continue;
+      const past = en < now;
+      appointments.push({
+        id: uid(), clientId: who[k % who.length], treatmentId: t.id, start: st.toISOString(), end: en.toISOString(),
+        status: past ? (k % 9 === 0 ? 'no_show' : 'completed') : 'booked', prepaid: k % 4 === 0, createdAt: st.toISOString(),
+      });
+    }
+  }
   const messages: Message[] = [
     { id: uid(), clientId: null, title: 'أهلًا بك في تطبيق DermaCare', body: 'من هنا تحجزين موعدك، وتتابعين زياراتك، وتصلك رسائلنا أولًا بأول.', createdAt: addDays(now, -3).toISOString() },
     { id: uid(), clientId: null, title: 'تنبيه قبل جلسة الليزر', body: 'يُرجى حلاقة المنطقة قبل الجلسة بـ 24 ساعة، وتجنّب التعرض للشمس أسبوعًا قبلها.', createdAt: addDays(now, -1).toISOString() },
