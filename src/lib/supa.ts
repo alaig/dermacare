@@ -42,8 +42,8 @@ const mapA = (r: any): Appointment => ({
 const mapFull = (r: any): AppointmentFull => ({ ...mapA(r), client: mapC(r.clients), treatment: mapT(r.treatments) });
 const mapM = (r: any): Message => ({ id: r.id, clientId: r.client_id, title: r.title, body: r.body, createdAt: r.created_at, kind: r.kind ?? 'manual' });
 
-// Clients sign in with phone + 4-digit PIN. Supabase needs an email/password, so both are derived from the phone.
-const clientEmail = (phone: string) => `p${phone}@clients.dermacare.app`;
+// Clients sign in with phone + 4-digit PIN (Supabase phone/password auth, no SMS).
+// Supabase needs a password of 6+ characters, so it is derived from the PIN and the phone.
 const clientPassword = (phone: string, pin: string) => `${pin}#dermacare#${phone}`;
 const TAKEN = 'هذا الرقم مسجّل في التطبيق. إذا كان رقمك، ادخلي برمزك السري أو تواصلي مع المركز';
 
@@ -88,12 +88,12 @@ export const liveApi: Api = {
     return mapC(row);
   },
   async registerClient(name, phone, birthDate, pin) {
-    const { data, error } = await sb.auth.signUp({ email: clientEmail(phone), password: clientPassword(phone, pin) });
+    const { data, error } = await sb.auth.signUp({ phone: toE164(phone), password: clientPassword(phone, pin) });
     if (error) {
-      if (/already registered|already exists/i.test(error.message)) throw new Error(TAKEN);
+      if (/already/i.test(error.message)) throw new Error(TAKEN);
       throw new Error(error.message);
     }
-    if (!data.session) throw new Error('يجب إيقاف "Confirm email" في إعدادات Supabase (Authentication → Email)');
+    if (!data.session) throw new Error('يجب إيقاف "Enable phone confirmations" في إعدادات Supabase (Authentication → Phone)');
     const r = await sb.rpc('register_client', { p_name: name, p_birth: birthDate });
     if (r.error) {
       await sb.auth.signOut();
@@ -103,7 +103,7 @@ export const liveApi: Api = {
     return mapC(r.data);
   },
   async loginClient(phone, pin) {
-    const { error } = await sb.auth.signInWithPassword({ email: clientEmail(phone), password: clientPassword(phone, pin) });
+    const { error } = await sb.auth.signInWithPassword({ phone: toE164(phone), password: clientPassword(phone, pin) });
     if (error) {
       if (/rate|too many/i.test(error.message)) throw new Error('محاولات كثيرة، انتظري قليلًا وحاولي مجددًا');
       throw new Error('رقم الهاتف أو الرمز السري غير صحيح');
