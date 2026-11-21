@@ -1,0 +1,194 @@
+// Demo backend: everything lives in localStorage so the app can be tried without a server.
+// OTP code is always 1234; admin login is any email + password "admin".
+import type { Api, Appointment, AppointmentFull, Client, ClientWithStats, Message, Settings, Treatment } from './types';
+import { addDays, startOfDay } from './time';
+
+const KEY = 'dermacare-demo-v1';
+const uid = () => Math.random().toString(36).slice(2, 10);
+
+interface DB {
+  settings: Settings;
+  treatments: Treatment[];
+  clients: Client[];
+  appointments: Appointment[];
+  messages: Message[];
+  session: { clientId: string | null; admin: boolean };
+}
+
+export const DEFAULT_SETTINGS: Settings = {
+  centerName: 'DermaCare',
+  phone: '0501234567',
+  whatsapp: '972501234567',
+  address: 'الناصرة، شارع بولس السادس',
+  prepayUrl: 'https://www.bitpay.co.il/',
+  loyaltyEnabled: true,
+  loyaltyTarget: 10,
+  loyaltyReward: 'الزيارة العاشرة هدية من المركز',
+  slotMinutes: 30,
+  workHours: [
+    { open: '09:00', close: '19:00' },
+    { open: '09:00', close: '19:00' },
+    { open: '09:00', close: '19:00' },
+    { open: '09:00', close: '19:00' },
+    { open: '09:00', close: '19:00' },
+    { open: '09:00', close: '14:00' },
+    null,
+  ],
+  calendarToken: 'demo-token',
+};
+
+function seed(): DB {
+  const treatments: Treatment[] = [
+    { id: 't1', name: 'إزالة شعر بالليزر', durationMin: 30, price: 250, active: true },
+    { id: 't2', name: 'تنظيف بشرة عميق', durationMin: 60, price: 300, active: true },
+    { id: 't3', name: 'تقشير كيميائي', durationMin: 45, price: 350, active: true },
+    { id: 't4', name: 'علاج حب الشباب', durationMin: 45, price: 280, active: true },
+    { id: 't5', name: 'استشارة أولى', durationMin: 15, price: 0, active: true },
+  ];
+  const now = new Date();
+  const clients: Client[] = [
+    { id: 'c1', name: 'رنا خوري', phone: '0521112233', createdAt: addDays(now, -200).toISOString() },
+    { id: 'c2', name: 'ميس عثامنة', phone: '0542223344', createdAt: addDays(now, -150).toISOString() },
+    { id: 'c3', name: 'لينا حداد', phone: '0503334455', createdAt: addDays(now, -90).toISOString() },
+    { id: 'c4', name: 'سمر زعبي', phone: '0524445566', createdAt: addDays(now, -30).toISOString() },
+  ];
+  const appointments: Appointment[] = [];
+  const mk = (clientId: string, treatmentId: string, dayOffset: number, hour: number, status: Appointment['status']) => {
+    const s = startOfDay(addDays(now, dayOffset));
+    s.setHours(hour, 0, 0, 0);
+    const t = treatments.find((x) => x.id === treatmentId)!;
+    appointments.push({
+      id: uid(), clientId, treatmentId, start: s.toISOString(),
+      end: new Date(s.getTime() + t.durationMin * 60_000).toISOString(),
+      status, prepaid: false, createdAt: s.toISOString(),
+    });
+  };
+  for (let i = 0; i < 9; i++) mk('c1', 't1', -180 + i * 18, 10, 'completed');
+  for (let i = 0; i < 6; i++) mk('c2', i % 2 ? 't2' : 't1', -140 + i * 20, 12, 'completed');
+  for (let i = 0; i < 3; i++) mk('c3', 't3', -80 + i * 25, 15, 'completed');
+  mk('c1', 't1', 0, 16, 'booked');
+  mk('c2', 't2', 1, 11, 'booked');
+  mk('c3', 't3', 1, 14, 'booked');
+  mk('c4', 't5', 2, 10, 'booked');
+  const messages: Message[] = [
+    { id: uid(), clientId: null, title: 'أهلًا بك في تطبيق DermaCare', body: 'من هنا تحجزين موعدك، وتتابعين زياراتك، وتصلك رسائلنا أولًا بأول.', createdAt: addDays(now, -3).toISOString() },
+    { id: uid(), clientId: null, title: 'تنبيه قبل جلسة الليزر', body: 'يُرجى حلاقة المنطقة قبل الجلسة بـ 24 ساعة، وتجنّب التعرض للشمس أسبوعًا قبلها.', createdAt: addDays(now, -1).toISOString() },
+  ];
+  return { settings: DEFAULT_SETTINGS, treatments, clients, appointments, messages, session: { clientId: null, admin: false } };
+}
+
+function load(): DB {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (raw) return JSON.parse(raw);
+  } catch { /* ignore */ }
+  const db = seed();
+  save(db);
+  return db;
+}
+function save(db: DB) {
+  try { localStorage.setItem(KEY, JSON.stringify(db)); } catch { /* ignore */ }
+}
+
+const wait = (ms = 150) => new Promise((r) => setTimeout(r, ms));
+
+function full(db: DB, a: Appointment): AppointmentFull {
+  return { ...a, client: db.clients.find((c) => c.id === a.clientId)!, treatment: db.treatments.find((t) => t.id === a.treatmentId)! };
+}
+
+function overlaps(db: DB, start: string, end: string) {
+  const s = new Date(start).getTime(), e = new Date(end).getTime();
+  return db.appointments.some((a) => a.status === 'booked' && s < new Date(a.end).getTime() && e > new Date(a.start).getTime());
+}
+
+function insertAppt(db: DB, clientId: string, treatmentId: string, startISO: string): Appointment {
+  const t = db.treatments.find((x) => x.id === treatmentId);
+  if (!t) throw new Error('العلاج غير موجود');
+  const end = new Date(new Date(startISO).getTime() + t.durationMin * 60_000).toISOString();
+  if (overlaps(db, startISO, end)) throw new Error('هذا الموعد لم يعد متاحًا، اختاري وقتًا آخر');
+  const a: Appointment = { id: uid(), clientId, treatmentId, start: startISO, end, status: 'booked', prepaid: false, createdAt: new Date().toISOString() };
+  db.appointments.push(a);
+  return a;
+}
+
+export const demoApi: Api = {
+  mode: 'demo',
+  async getSettings() { return load().settings; },
+  async listTreatments(all) { const db = load(); return all ? db.treatments : db.treatments.filter((t) => t.active); },
+  async busyIntervals(from, to) {
+    const db = load(); const f = new Date(from).getTime(), t = new Date(to).getTime();
+    return db.appointments.filter((a) => a.status === 'booked' && new Date(a.start).getTime() < t && new Date(a.end).getTime() > f).map((a) => ({ start: a.start, end: a.end }));
+  },
+
+  async currentClient() { const db = load(); return db.clients.find((c) => c.id === db.session.clientId) ?? null; },
+  async requestOtp() { await wait(400); },
+  async verifyOtp(phone, code, name) {
+    await wait(300);
+    if (code !== '1234') throw new Error('الرمز غير صحيح');
+    const db = load();
+    let c = db.clients.find((x) => x.phone === phone);
+    if (!c) { c = { id: uid(), name, phone, createdAt: new Date().toISOString() }; db.clients.push(c); }
+    else if (name) c.name = name;
+    db.session.clientId = c.id; save(db); return c;
+  },
+  async signOut() { const db = load(); db.session.clientId = null; save(db); },
+  async book(treatmentId, startISO) {
+    const db = load(); if (!db.session.clientId) throw new Error('يجب تسجيل الدخول');
+    const a = insertAppt(db, db.session.clientId, treatmentId, startISO); save(db); return a;
+  },
+  async myAppointments() {
+    const db = load();
+    return db.appointments.filter((a) => a.clientId === db.session.clientId).map((a) => full(db, a)).sort((a, b) => a.start.localeCompare(b.start));
+  },
+  async cancelAppointment(id) {
+    const db = load(); const a = db.appointments.find((x) => x.id === id && x.clientId === db.session.clientId);
+    if (a) a.status = 'cancelled'; save(db);
+  },
+  async myMessages() {
+    const db = load();
+    return db.messages.filter((m) => m.clientId === null || m.clientId === db.session.clientId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  },
+  async myVisits() { const db = load(); return db.appointments.filter((a) => a.clientId === db.session.clientId && a.status === 'completed').length; },
+  async savePushSubscription() { /* demo: nothing to store */ },
+
+  async isAdmin() { return load().session.admin; },
+  async adminSignIn(_email, password) {
+    await wait(300);
+    if (password !== 'admin') throw new Error('بيانات الدخول غير صحيحة');
+    const db = load(); db.session.admin = true; save(db);
+  },
+  async adminSignOut() { const db = load(); db.session.admin = false; save(db); },
+  async listAppointments(from, to) {
+    const db = load();
+    return db.appointments.filter((a) => a.start >= from && a.start < to).map((a) => full(db, a)).sort((a, b) => a.start.localeCompare(b.start));
+  },
+  async setAppointmentStatus(id, status) { const db = load(); const a = db.appointments.find((x) => x.id === id); if (a) a.status = status; save(db); },
+  async setPrepaid(id, prepaid) { const db = load(); const a = db.appointments.find((x) => x.id === id); if (a) a.prepaid = prepaid; save(db); },
+  async adminBook(name, phone, treatmentId, startISO) {
+    const db = load();
+    let c = db.clients.find((x) => x.phone === phone);
+    if (!c) { c = { id: uid(), name, phone, createdAt: new Date().toISOString() }; db.clients.push(c); }
+    insertAppt(db, c.id, treatmentId, startISO); save(db);
+  },
+  async listClients(): Promise<ClientWithStats[]> {
+    const db = load(); const nowIso = new Date().toISOString();
+    return db.clients.map((c) => {
+      const mine = db.appointments.filter((a) => a.clientId === c.id);
+      const done = mine.filter((a) => a.status === 'completed').sort((a, b) => b.start.localeCompare(a.start));
+      const next = mine.filter((a) => a.status === 'booked' && a.start >= nowIso).sort((a, b) => a.start.localeCompare(b.start))[0];
+      return { ...c, visits: done.length, lastVisit: done[0]?.start ?? null, nextAppt: next?.start ?? null };
+    });
+  },
+  async listMessages() { return load().messages.slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt)); },
+  async sendMessage(m) { const db = load(); db.messages.push({ ...m, id: uid(), createdAt: new Date().toISOString() }); save(db); },
+  async deleteMessage(id) { const db = load(); db.messages = db.messages.filter((m) => m.id !== id); save(db); },
+  async saveSettings(s) { const db = load(); db.settings = s; save(db); },
+  async saveTreatment(t) {
+    const db = load(); const i = db.treatments.findIndex((x) => x.id === t.id);
+    if (i >= 0) db.treatments[i] = t; else db.treatments.push({ ...t, id: t.id || uid() });
+    save(db);
+  },
+  calendarFeedUrl() { return ''; },
+};
+
+export function resetDemo() { localStorage.removeItem(KEY); }
