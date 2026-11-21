@@ -19,7 +19,7 @@ function introOnce() {
 }
 
 export default function Home() {
-  const { client, settings: s } = useClient();
+  const { client, settings: s, signOut } = useClient();
   const navigate = useNavigate();
   const [animate] = useState(introOnce);
   const { data } = useLoad(async () => {
@@ -38,6 +38,15 @@ export default function Home() {
 
   return (
     <>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+        <span className="hint" style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          مسجّلة باسم <b style={{ color: 'var(--navy)' }}>{client.name}</b>
+        </span>
+        <button className="btn ghost sm" style={{ minHeight: 34 }}
+          onClick={() => { if (confirm(`تسجيل خروج ${firstName} من هذا الجهاز؟\nللدخول مرة أخرى: رقم الهاتف والرمز السري.`)) signOut(); }}>
+          {Icon.logout} خروج
+        </button>
+      </div>
       <section className="intro">
         <AnimatedLogo animate={animate} />
         <p className="greet rise" style={d(1.9)}>{greet}، <b>{firstName}</b></p>

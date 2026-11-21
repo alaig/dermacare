@@ -73,7 +73,7 @@ export default function Appointments() {
         </>
       )}
       <button className="btn ghost block" style={{ marginTop: 24 }} onClick={() => { if (confirm('تسجيل الخروج من هذا الجهاز؟')) signOut(); }}>
-        {Icon.logout} تسجيل الخروج
+        {Icon.logout} تسجيل الخروج (تبديل الحساب)
       </button>
     </>
   );
