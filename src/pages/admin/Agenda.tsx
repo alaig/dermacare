@@ -6,6 +6,7 @@ import { DAY_NAMES, addDays, fmtDate, fmtTime, normalizePhone, sameDay, startOfD
 import { whatsappUrl } from '../../lib/calendar';
 import type { AppointmentFull, ApptStatus, Treatment } from '../../lib/types';
 import { useAdmin } from './AdminApp';
+import { isBirthdayToday, renderGreeting } from '../../lib/birthday';
 
 const STATUS: Record<ApptStatus, [string, string]> = {
   booked: ['محجوز', ''],
@@ -28,7 +29,8 @@ export default function Agenda() {
       api.listClients(),
     ]);
     const visits = new Map(clients.map((c) => [c.id, c.visits]));
-    return { appts, visits };
+    const birthdays = clients.filter((c) => isBirthdayToday(c.birthDate));
+    return { appts, visits, birthdays };
   }, [day.getTime()]);
 
   const active = data?.appts.filter((a) => a.status !== 'cancelled') ?? [];
@@ -65,6 +67,23 @@ export default function Agenda() {
         <div className="stat"><b>{done}</b><span>تمّت</span></div>
         <div className="stat"><b>{prepaid}</b><span>مدفوعة مسبقًا</span></div>
       </div>
+
+      {sameDay(day, today) && data && data.birthdays.length > 0 && (
+        <div className="card bday" style={{ marginTop: 12 }}>
+          <b>🎂 عيد ميلاد اليوم</b>
+          <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
+            {data.birthdays.map((c) => (
+              <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ flex: 1, fontWeight: 600 }}>{c.name}</span>
+                <a className="btn light sm" href={whatsappUrl('972' + c.phone.slice(1), `${renderGreeting(s.birthdayTitle, c.name, s.birthdayGift)}\n${renderGreeting(s.birthdayBody, c.name, s.birthdayGift)}`)} target="_blank" rel="noreferrer">
+                  {Icon.whatsapp} معايدة
+                </a>
+              </div>
+            ))}
+          </div>
+          {s.birthdayEnabled && <p className="hint" style={{ marginTop: 8, fontSize: 12 }}>المعايدة داخل التطبيق تُرسل تلقائيًا كل صباح</p>}
+        </div>
+      )}
 
       <div className="section-title">الجدول</div>
       {!data ? <div className="hint">جارٍ التحميل…</div> : data.appts.length === 0 ? (

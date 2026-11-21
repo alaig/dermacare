@@ -34,13 +34,13 @@ function sendError(msg: string) {
 }
 
 const mapT = (r: any): Treatment => ({ id: r.id, name: r.name, durationMin: r.duration_min, price: r.price, active: r.active });
-const mapC = (r: any): Client => ({ id: r.id, name: r.name, phone: r.phone, createdAt: r.created_at });
+const mapC = (r: any): Client => ({ id: r.id, name: r.name, phone: r.phone, birthDate: r.birth_date ?? null, createdAt: r.created_at });
 const mapA = (r: any): Appointment => ({
   id: r.id, clientId: r.client_id, treatmentId: r.treatment_id, start: r.start_at, end: r.end_at,
   status: r.status, prepaid: r.prepaid, createdAt: r.created_at,
 });
 const mapFull = (r: any): AppointmentFull => ({ ...mapA(r), client: mapC(r.clients), treatment: mapT(r.treatments) });
-const mapM = (r: any): Message => ({ id: r.id, clientId: r.client_id, title: r.title, body: r.body, createdAt: r.created_at });
+const mapM = (r: any): Message => ({ id: r.id, clientId: r.client_id, title: r.title, body: r.body, createdAt: r.created_at, kind: r.kind ?? 'manual' });
 
 const APPT_SELECT = '*, clients(*), treatments(*)';
 
@@ -76,12 +76,13 @@ export const liveApi: Api = {
     const { error } = await sb.auth.signInWithOtp({ phone: toE164(phone) });
     if (error) throw new Error(sendError(error.message));
   },
-  async verifyOtp(phone, code, name) {
+  async verifyOtp(phone, code, name, birthDate) {
     const { error } = await sb.auth.verifyOtp({ phone: toE164(phone), token: code, type: 'sms' });
     if (error) throw new Error(friendly(error.message));
-    const row = ok(await sb.rpc('claim_client', { p_name: name }));
+    const row = ok(await sb.rpc('claim_client', { p_name: name, p_birth: birthDate }));
     return mapC(row);
   },
+  async setMyBirthDate(date) { ok(await sb.rpc('set_my_birth_date', { p_birth: date })); },
   async signOut() { await sb.auth.signOut(); },
   async book(treatmentId, startISO) {
     return mapA(ok(await sb.rpc('book_appointment', { p_treatment: treatmentId, p_start: startISO })));
@@ -148,6 +149,8 @@ export const liveApi: Api = {
     if (t.id) ok(await sb.from('treatments').update(row).eq('id', t.id));
     else ok(await sb.from('treatments').insert(row));
   },
+  async setClientBirthDate(clientId, date) { ok(await sb.from('clients').update({ birth_date: date }).eq('id', clientId)); },
+  async sendBirthdaysNow() { return (ok(await sb.rpc('admin_send_birthdays')) as number) ?? 0; },
   calendarFeedUrl(token) {
     return `${url.replace(/^https:/, 'webcal:')}/functions/v1/calendar-feed?token=${encodeURIComponent(token)}`;
   },

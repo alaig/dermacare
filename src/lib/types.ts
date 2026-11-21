@@ -12,6 +12,10 @@ export interface Settings {
   slotMinutes: number;
   workHours: DayHours[]; // index 0 = Sunday
   calendarToken: string; // secret for admin ICS feed
+  birthdayEnabled: boolean; // auto-send a birthday greeting
+  birthdayGift: string; // same gift for everyone, set by the owner
+  birthdayTitle: string; // supports {الاسم} and {الهدية}
+  birthdayBody: string;
 }
 
 export interface Treatment {
@@ -26,6 +30,7 @@ export interface Client {
   id: string;
   name: string;
   phone: string;
+  birthDate: string | null; // YYYY-MM-DD
   createdAt: string;
 }
 
@@ -53,6 +58,7 @@ export interface Message {
   title: string;
   body: string;
   createdAt: string;
+  kind?: 'manual' | 'birthday';
 }
 
 export interface ClientWithStats extends Client {
@@ -76,7 +82,8 @@ export interface Api {
   // client
   currentClient(): Promise<Client | null>;
   requestOtp(phone: string): Promise<void>;
-  verifyOtp(phone: string, code: string, name: string): Promise<Client>;
+  verifyOtp(phone: string, code: string, name: string, birthDate: string | null): Promise<Client>;
+  setMyBirthDate(date: string): Promise<void>;
   signOut(): Promise<void>;
   book(treatmentId: string, startISO: string): Promise<Appointment>;
   myAppointments(): Promise<AppointmentFull[]>;
@@ -99,5 +106,7 @@ export interface Api {
   deleteMessage(id: string): Promise<void>;
   saveSettings(s: Settings): Promise<void>;
   saveTreatment(t: Treatment): Promise<void>;
+  setClientBirthDate(clientId: string, date: string | null): Promise<void>;
+  sendBirthdaysNow(): Promise<number>;
   calendarFeedUrl(token: string): string;
 }

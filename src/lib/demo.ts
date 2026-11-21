@@ -2,8 +2,9 @@
 // OTP code is always 1234; admin login is any email + password "admin".
 import type { Api, Appointment, AppointmentFull, Client, ClientWithStats, Message, Settings, Treatment } from './types';
 import { addDays, startOfDay } from './time';
+import { BIRTHDAY_DEFAULTS, isBirthdayToday, renderGreeting, todayKey } from './birthday';
 
-const KEY = 'dermacare-demo-v1';
+const KEY = 'dermacare-demo-v2';
 const uid = () => Math.random().toString(36).slice(2, 10);
 
 interface DB {
@@ -35,6 +36,7 @@ export const DEFAULT_SETTINGS: Settings = {
     null,
   ],
   calendarToken: 'demo-token',
+  ...BIRTHDAY_DEFAULTS,
 };
 
 function seed(): DB {
@@ -46,11 +48,15 @@ function seed(): DB {
     { id: 't5', name: 'استشارة أولى', durationMin: 15, price: 0, active: true },
   ];
   const now = new Date();
+  const bd = (yearsAgo: number, dayOffset: number) => {
+    const d = addDays(now, dayOffset);
+    return todayKey(new Date(d.getFullYear() - yearsAgo, d.getMonth(), d.getDate()));
+  };
   const clients: Client[] = [
-    { id: 'c1', name: 'رنا خوري', phone: '0521112233', createdAt: addDays(now, -200).toISOString() },
-    { id: 'c2', name: 'ميس عثامنة', phone: '0542223344', createdAt: addDays(now, -150).toISOString() },
-    { id: 'c3', name: 'لينا حداد', phone: '0503334455', createdAt: addDays(now, -90).toISOString() },
-    { id: 'c4', name: 'سمر زعبي', phone: '0524445566', createdAt: addDays(now, -30).toISOString() },
+    { id: 'c1', name: 'رنا خوري', phone: '0521112233', birthDate: bd(29, 40), createdAt: addDays(now, -200).toISOString() },
+    { id: 'c2', name: 'ميس عثامنة', phone: '0542223344', birthDate: bd(34, 0), createdAt: addDays(now, -150).toISOString() },
+    { id: 'c3', name: 'لينا حداد', phone: '0503334455', birthDate: bd(25, 3), createdAt: addDays(now, -90).toISOString() },
+    { id: 'c4', name: 'سمر زعبي', phone: '0524445566', birthDate: null, createdAt: addDays(now, -30).toISOString() },
   ];
   const appointments: Appointment[] = [];
   const mk = (clientId: string, treatmentId: string, dayOffset: number, hour: number, status: Appointment['status']) => {
@@ -90,6 +96,26 @@ function save(db: DB) {
   try { localStorage.setItem(KEY, JSON.stringify(db)); } catch { /* ignore */ }
 }
 
+/** Demo stand-in for the daily database job: greet everyone whose birthday is today, once a year. */
+function runBirthdays(db: DB): number {
+  const s = { ...DEFAULT_SETTINGS, ...db.settings };
+  if (!s.birthdayEnabled) return 0;
+  const year = String(new Date().getFullYear());
+  let n = 0;
+  for (const c of db.clients) {
+    if (!isBirthdayToday(c.birthDate)) continue;
+    if (db.messages.some((m) => m.kind === 'birthday' && m.clientId === c.id && m.createdAt.startsWith(year))) continue;
+    db.messages.push({
+      id: uid(), clientId: c.id, kind: 'birthday', createdAt: new Date().toISOString(),
+      title: renderGreeting(s.birthdayTitle, c.name, s.birthdayGift),
+      body: renderGreeting(s.birthdayBody, c.name, s.birthdayGift),
+    });
+    n++;
+  }
+  if (n) save(db);
+  return n;
+}
+
 const wait = (ms = 150) => new Promise((r) => setTimeout(r, ms));
 
 function full(db: DB, a: Appointment): AppointmentFull {
@@ -113,7 +139,7 @@ function insertAppt(db: DB, clientId: string, treatmentId: string, startISO: str
 
 export const demoApi: Api = {
   mode: 'demo',
-  async getSettings() { return load().settings; },
+  async getSettings() { return { ...DEFAULT_SETTINGS, ...load().settings }; },
   async listTreatments(all) { const db = load(); return all ? db.treatments : db.treatments.filter((t) => t.active); },
   async busyIntervals(from, to) {
     const db = load(); const f = new Date(from).getTime(), t = new Date(to).getTime();
@@ -122,14 +148,18 @@ export const demoApi: Api = {
 
   async currentClient() { const db = load(); return db.clients.find((c) => c.id === db.session.clientId) ?? null; },
   async requestOtp() { await wait(400); },
-  async verifyOtp(phone, code, name) {
+  async verifyOtp(phone, code, name, birthDate) {
     await wait(300);
     if (code !== '1234') throw new Error('الرمز غير صحيح');
     const db = load();
     let c = db.clients.find((x) => x.phone === phone);
-    if (!c) { c = { id: uid(), name, phone, createdAt: new Date().toISOString() }; db.clients.push(c); }
-    else if (name) c.name = name;
+    if (!c) { c = { id: uid(), name, phone, birthDate, createdAt: new Date().toISOString() }; db.clients.push(c); }
+    else { if (name) c.name = name; if (birthDate) c.birthDate = birthDate; }
     db.session.clientId = c.id; save(db); return c;
+  },
+  async setMyBirthDate(date) {
+    const db = load(); const c = db.clients.find((x) => x.id === db.session.clientId);
+    if (c) c.birthDate = date; save(db);
   },
   async signOut() { const db = load(); db.session.clientId = null; save(db); },
   async book(treatmentId, startISO) {
@@ -145,7 +175,7 @@ export const demoApi: Api = {
     if (a) a.status = 'cancelled'; save(db);
   },
   async myMessages() {
-    const db = load();
+    const db = load(); runBirthdays(db);
     return db.messages.filter((m) => m.clientId === null || m.clientId === db.session.clientId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   },
   async myVisits() { const db = load(); return db.appointments.filter((a) => a.clientId === db.session.clientId && a.status === 'completed').length; },
@@ -167,7 +197,7 @@ export const demoApi: Api = {
   async adminBook(name, phone, treatmentId, startISO) {
     const db = load();
     let c = db.clients.find((x) => x.phone === phone);
-    if (!c) { c = { id: uid(), name, phone, createdAt: new Date().toISOString() }; db.clients.push(c); }
+    if (!c) { c = { id: uid(), name, phone, birthDate: null, createdAt: new Date().toISOString() }; db.clients.push(c); }
     insertAppt(db, c.id, treatmentId, startISO); save(db);
   },
   async listClients(): Promise<ClientWithStats[]> {
@@ -179,7 +209,7 @@ export const demoApi: Api = {
       return { ...c, visits: done.length, lastVisit: done[0]?.start ?? null, nextAppt: next?.start ?? null };
     });
   },
-  async listMessages() { return load().messages.slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt)); },
+  async listMessages() { const db = load(); runBirthdays(db); return db.messages.slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt)); },
   async sendMessage(m) { const db = load(); db.messages.push({ ...m, id: uid(), createdAt: new Date().toISOString() }); save(db); },
   async deleteMessage(id) { const db = load(); db.messages = db.messages.filter((m) => m.id !== id); save(db); },
   async saveSettings(s) { const db = load(); db.settings = s; save(db); },
@@ -188,6 +218,11 @@ export const demoApi: Api = {
     if (i >= 0) db.treatments[i] = t; else db.treatments.push({ ...t, id: t.id || uid() });
     save(db);
   },
+  async setClientBirthDate(clientId, date) {
+    const db = load(); const c = db.clients.find((x) => x.id === clientId);
+    if (c) c.birthDate = date; save(db);
+  },
+  async sendBirthdaysNow() { return runBirthdays(load()); },
   calendarFeedUrl() { return ''; },
 };
 

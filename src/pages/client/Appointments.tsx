@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { api } from '../../lib/api';
-import { useLoad, useToast } from '../../components/ui';
+import { Icon, LoyaltyCard, useLoad, useToast } from '../../components/ui';
 import { fmtShortDate, fmtTime, DAY_NAMES } from '../../lib/time';
 import type { AppointmentFull, ApptStatus } from '../../lib/types';
 import { useClient } from './ClientApp';
@@ -14,12 +14,13 @@ const STATUS: Record<ApptStatus, [string, string]> = {
 };
 
 export default function Appointments() {
-  const { settings: s } = useClient();
+  const { settings: s, signOut } = useClient();
   const toast = useToast();
   const { data, reload } = useLoad(() => api.myAppointments());
   const nowIso = new Date().toISOString();
   const upcoming = data?.filter((a) => a.status === 'booked' && a.end > nowIso) ?? [];
   const past = (data?.filter((a) => !upcoming.includes(a)) ?? []).reverse();
+  const visits = data?.filter((a) => a.status === 'completed').length ?? 0;
 
   const cancel = async (a: AppointmentFull) => {
     if (!confirm(`إلغاء موعد ${a.treatment.name}؟`)) return;
@@ -30,8 +31,9 @@ export default function Appointments() {
 
   return (
     <>
-      <h1 className="page-title">مواعيدي</h1>
-      <div className="section-title" style={{ marginTop: 0 }}>القادمة</div>
+      <h1 className="page-title">زياراتي</h1>
+      {data && s.loyaltyEnabled && <LoyaltyCard visits={visits} target={s.loyaltyTarget} reward={s.loyaltyReward} />}
+      <div className="section-title">المواعيد القادمة</div>
       {!data ? <div className="hint">جارٍ التحميل…</div> : upcoming.length === 0 ? (
         <div className="card empty">
           <p style={{ marginBottom: 12 }}>لا توجد مواعيد قادمة</p>
@@ -54,7 +56,7 @@ export default function Appointments() {
 
       {past.length > 0 && (
         <>
-          <div className="section-title">السابقة</div>
+          <div className="section-title">الزيارات السابقة</div>
           <div className="list">
             {past.map((a) => (
               <div className="item" key={a.id}>
@@ -68,6 +70,9 @@ export default function Appointments() {
           </div>
         </>
       )}
+      <button className="btn ghost block" style={{ marginTop: 24 }} onClick={() => { if (confirm('تسجيل الخروج من هذا الجهاز؟')) signOut(); }}>
+        {Icon.logout} تسجيل الخروج
+      </button>
     </>
   );
 }

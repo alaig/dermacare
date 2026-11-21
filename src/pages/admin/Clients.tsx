@@ -2,15 +2,16 @@ import { useState, type FormEvent } from 'react';
 import { api } from '../../lib/api';
 import { Icon, Sheet, initials, useLoad, useToast } from '../../components/ui';
 import { fmtShortDate } from '../../lib/time';
+import { BIRTH_MIN, birthMax, daysToBirthday, fmtBirthday, renderGreeting } from '../../lib/birthday';
 import { whatsappUrl } from '../../lib/calendar';
 import type { ClientWithStats } from '../../lib/types';
 import { useAdmin } from './AdminApp';
 
-type Filter = 'all' | 'gift' | 'cycle' | 'idle';
+type Filter = 'all' | 'gift' | 'cycle' | 'idle' | 'bday';
 
 export default function Clients() {
   const { settings: s } = useAdmin();
-  const { data } = useLoad(() => api.listClients());
+  const { data, reload } = useLoad(() => api.listClients());
   const [q, setQ] = useState('');
   const [f, setF] = useState<Filter>('all');
   const [sel, setSel] = useState<ClientWithStats | null>(null);
@@ -21,13 +22,16 @@ export default function Clients() {
     ['all', 'الكل', () => true],
     ['gift', 'زيارتها القادمة هدية', (c) => c.visits % T === T - 1],
     ['cycle', `أكملت ${T}+`, (c) => c.visits >= T],
+    ['bday', '🎂 عيد ميلاد خلال أسبوع', (c) => { const d = daysToBirthday(c.birthDate); return d !== null && d <= 7; }],
     ['idle', 'لم تزر منذ شهرين', (c) => !c.nextAppt && !!c.lastVisit && c.lastVisit < idleSince],
   ];
   const fn = filters.find((x) => x[0] === f)![2];
   const list = (data ?? [])
     .filter(fn)
     .filter((c) => !q || c.name.includes(q) || c.phone.includes(q.replace(/\D/g, '')))
-    .sort((a, b) => b.visits - a.visits);
+    .sort((a, b) => f === 'bday'
+      ? (daysToBirthday(a.birthDate) ?? 999) - (daysToBirthday(b.birthDate) ?? 999)
+      : b.visits - a.visits);
 
   return (
     <>
@@ -51,7 +55,8 @@ export default function Clients() {
                 <span className="grow">
                   <span className="t" style={{ display: 'block' }}>{c.name}</span>
                   <span className="s" style={{ display: 'block' }}>
-                    {c.nextAppt ? `موعد قادم ${fmtShortDate(c.nextAppt)}` : c.lastVisit ? `آخر زيارة ${fmtShortDate(c.lastVisit)}` : 'لم تزر بعد'}
+                    {daysToBirthday(c.birthDate) === 0 ? '🎂 عيد ميلادها اليوم' : f === 'bday' && c.birthDate ? `🎂 ${fmtBirthday(c.birthDate)} · بعد ${daysToBirthday(c.birthDate)} أيام`
+                      : c.nextAppt ? `موعد قادم ${fmtShortDate(c.nextAppt)}` : c.lastVisit ? `آخر زيارة ${fmtShortDate(c.lastVisit)}` : 'لم تزر بعد'}
                   </span>
                   <span className="progress" style={{ display: 'block', marginTop: 8 }}><i style={{ width: `${(inCycle / (T - 1)) * 100}%` }} /></span>
                 </span>
@@ -61,17 +66,25 @@ export default function Clients() {
           })}
         </div>
       )}
-      <ClientSheet c={sel} onClose={() => setSel(null)} />
+      <ClientSheet c={sel} onClose={() => setSel(null)} onChanged={reload} />
     </>
   );
 }
 
-function ClientSheet({ c, onClose }: { c: ClientWithStats | null; onClose: () => void }) {
+function ClientSheet({ c, onClose, onChanged }: { c: ClientWithStats | null; onClose: () => void; onChanged: () => void }) {
   const { settings: s } = useAdmin();
   const toast = useToast();
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
+  const [birth, setBirth] = useState('');
+  const [lastId, setLastId] = useState<string | null>(null);
+  if (c && c.id !== lastId) { setLastId(c.id); setBirth(c.birthDate ?? ''); }
   if (!c) return null;
+  const greeting = `${renderGreeting(s.birthdayTitle, c.name, s.birthdayGift)}\n${renderGreeting(s.birthdayBody, c.name, s.birthdayGift)}`;
+  const saveBirth = async () => {
+    await api.setClientBirthDate(c.id, birth || null);
+    toast('تم حفظ تاريخ الميلاد'); onChanged(); onClose();
+  };
   const T = s.loyaltyTarget;
   const send = async (e: FormEvent) => {
     e.preventDefault();
@@ -97,6 +110,16 @@ function ClientSheet({ c, onClose }: { c: ClientWithStats | null; onClose: () =>
         <a className="btn ghost" href={`tel:${c.phone}`}>{Icon.phone} اتصال</a>
         <a className="btn ghost" href={whatsappUrl('972' + c.phone.slice(1))} target="_blank" rel="noreferrer" style={{ color: '#1f9d55' }}>{Icon.whatsapp} واتساب</a>
       </div>
+      <div className="section-title">تاريخ الميلاد</div>
+      <div className="row">
+        <input className="input" type="date" value={birth} min={BIRTH_MIN} max={birthMax()} onChange={(e) => setBirth(e.target.value)} style={{ flex: 2 }} />
+        <button className="btn soft" disabled={birth === (c.birthDate ?? '')} onClick={saveBirth}>حفظ</button>
+      </div>
+      {daysToBirthday(c.birthDate) === 0 && (
+        <a className="btn primary block" style={{ marginTop: 10 }} href={whatsappUrl('972' + c.phone.slice(1), greeting)} target="_blank" rel="noreferrer">
+          🎂 معايدة عبر واتساب
+        </a>
+      )}
       <form onSubmit={send} style={{ marginTop: 18 }}>
         <div className="section-title" style={{ marginTop: 0 }}>رسالة خاصة داخل التطبيق</div>
         <input className="input" placeholder="العنوان" value={title} onChange={(e) => setTitle(e.target.value)} style={{ marginBottom: 8 }} />

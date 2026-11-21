@@ -5,6 +5,7 @@ import { DAY_NAMES } from '../../lib/time';
 import type { Settings, Treatment } from '../../lib/types';
 import { useAdmin } from './AdminApp';
 import { resetDemo } from '../../lib/demo';
+import { renderGreeting } from '../../lib/birthday';
 
 export default function AdminSettings() {
   const { settings, setSettings, signOut } = useAdmin();
@@ -44,6 +45,39 @@ export default function AdminSettings() {
             <input className="input" value={s.loyaltyReward} onChange={(e) => up('loyaltyReward', e.target.value)} />
           </label>
         </div>
+      </div>
+
+      <div className="section-title">معايدة عيد الميلاد 🎂</div>
+      <div className="card">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 700 }}>إرسال معايدة تلقائية</div>
+            <div className="hint">كل صباح، تصل رسالة باسم كل زبونة عيد ميلادها اليوم</div>
+          </div>
+          <Switch checked={s.birthdayEnabled} onChange={(v) => up('birthdayEnabled', v)} label="معايدة عيد الميلاد" />
+        </div>
+        <label className="field"><span>الهدية (ثابتة لكل الزبائن)</span>
+          <input className="input" value={s.birthdayGift} onChange={(e) => up('birthdayGift', e.target.value)} placeholder="مثال: خصم 20% على أي علاج" />
+        </label>
+        <label className="field"><span>عنوان الرسالة</span>
+          <input className="input" value={s.birthdayTitle} onChange={(e) => up('birthdayTitle', e.target.value)} />
+        </label>
+        <label className="field"><span>نص الرسالة</span>
+          <textarea className="input" value={s.birthdayBody} onChange={(e) => up('birthdayBody', e.target.value)} />
+        </label>
+        <p className="hint" style={{ marginTop: -6, marginBottom: 12 }}>
+          اكتبي <b>{'{الاسم}'}</b> ليظهر اسم الزبونة، و<b>{'{الهدية}'}</b> لتظهر الهدية.
+        </p>
+        <div className="section-title" style={{ marginTop: 0 }}>هكذا ستظهر لرنا:</div>
+        <div className="card msg" style={{ background: '#fff', boxShadow: 'inset 3px 0 0 var(--coral)' }}>
+          <h3>{renderGreeting(s.birthdayTitle, 'رنا', s.birthdayGift)}</h3>
+          <p>{renderGreeting(s.birthdayBody, 'رنا', s.birthdayGift)}</p>
+        </div>
+        <button className="btn soft block" style={{ marginTop: 12 }} disabled={dirty} onClick={async () => {
+          const n = await api.sendBirthdaysNow();
+          toast(n ? `تم إرسال ${n} ${n === 1 ? 'معايدة' : 'معايدات'}` : 'لا توجد أعياد ميلاد جديدة اليوم');
+        }}>إرسال معايدات اليوم الآن</button>
+        {dirty && <p className="hint" style={{ marginTop: 6, textAlign: 'center' }}>احفظي التغييرات أولًا</p>}
       </div>
 
       <div className="section-title">بيانات المركز</div>
