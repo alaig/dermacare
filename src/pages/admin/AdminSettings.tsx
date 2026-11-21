@@ -6,6 +6,7 @@ import type { Settings, Treatment } from '../../lib/types';
 import { useAdmin } from './AdminApp';
 import { resetDemo } from '../../lib/demo';
 import { renderGreeting } from '../../lib/birthday';
+import StaffSection from './StaffSection';
 
 export default function AdminSettings() {
   const { settings, setSettings, signOut } = useAdmin();
@@ -162,6 +163,8 @@ export default function AdminSettings() {
           </>
         ) : <p className="hint">يعمل بعد ربط قاعدة البيانات (غير متاح في النسخة التجريبية).</p>}
       </div>
+
+      <StaffSection />
 
       <div className="section-title">الحساب</div>
       <div className="card" style={{ display: 'grid', gap: 8 }}>

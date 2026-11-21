@@ -15,6 +15,8 @@ interface DB {
   messages: Message[];
   session: { clientId: string | null; admin: boolean };
   pins?: Record<string, string>; // phone -> pin
+  staff?: { id: string; username: string; name: string; password: string }[];
+  staffId?: string | null;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -140,6 +142,15 @@ function runBirthdays(db: DB): number {
   return n;
 }
 
+export const STAFF_ERR: Record<string, string> = {
+  bad_username: 'اسم المستخدم: 3-30 حرفًا إنجليزيًا صغيرًا أو أرقامًا (مسموح . _ -)',
+  short_password: 'كلمة السر يجب أن تكون 8 أحرف على الأقل',
+  username_taken: 'اسم المستخدم مستعمل، اختاري اسمًا آخر',
+  cannot_delete_self: 'لا يمكن حذف حسابك أنت',
+  last_admin: 'يجب أن يبقى مستخدم واحد على الأقل',
+  not_staff: 'المستخدم غير موجود',
+};
+
 const wait = (ms = 150) => new Promise((r) => setTimeout(r, ms));
 
 function full(db: DB, a: Appointment): AppointmentFull {
@@ -224,12 +235,42 @@ export const demoApi: Api = {
   async savePushSubscription() { /* demo: nothing to store */ },
 
   async isAdmin() { return load().session.admin; },
-  async adminSignIn(_email, password) {
+  async adminSignIn(login, password) {
     await wait(300);
-    if (password !== 'admin') throw new Error('بيانات الدخول غير صحيحة');
-    const db = load(); db.session.admin = true; save(db);
+    const db = load(); db.staff ??= [{ id: 's1', username: 'admin', name: 'المدير', password: 'admin' }];
+    const u = db.staff.find((x) => x.username === login.trim().toLowerCase() && x.password === password);
+    if (!u) throw new Error('اسم المستخدم أو كلمة السر غير صحيحة');
+    db.session.admin = true; db.staffId = u.id; save(db);
   },
-  async adminSignOut() { const db = load(); db.session.admin = false; save(db); },
+  async adminSignOut() { const db = load(); db.session.admin = false; db.staffId = null; save(db); },
+  async listStaff() {
+    const db = load(); db.staff ??= [{ id: 's1', username: 'admin', name: 'المدير', password: 'admin' }];
+    return db.staff.map((x) => ({ id: x.id, username: x.username, name: x.name, email: null, isMe: x.id === (db.staffId ?? 's1') }));
+  },
+  async createStaff(name, username, password) {
+    const db = load(); db.staff ??= [{ id: 's1', username: 'admin', name: 'المدير', password: 'admin' }];
+    const u = username.trim().toLowerCase();
+    if (!/^[a-z0-9._-]{3,30}$/.test(u)) throw new Error(STAFF_ERR.bad_username);
+    if (password.length < 8) throw new Error(STAFF_ERR.short_password);
+    if (db.staff.some((x) => x.username === u)) throw new Error(STAFF_ERR.username_taken);
+    db.staff.push({ id: uid(), username: u, name, password }); save(db);
+  },
+  async setStaffPassword(id, password) {
+    if (password.length < 8) throw new Error(STAFF_ERR.short_password);
+    const db = load(); const x = db.staff?.find((s) => s.id === id); if (x) x.password = password; save(db);
+  },
+  async setStaffUsername(id, username) {
+    const db = load(); const u = username.trim().toLowerCase();
+    if (!/^[a-z0-9._-]{3,30}$/.test(u)) throw new Error(STAFF_ERR.bad_username);
+    if (db.staff?.some((x) => x.username === u && x.id !== id)) throw new Error(STAFF_ERR.username_taken);
+    const x = db.staff?.find((s) => s.id === id); if (x) x.username = u; save(db);
+  },
+  async deleteStaff(id) {
+    const db = load();
+    if (id === (db.staffId ?? 's1')) throw new Error(STAFF_ERR.cannot_delete_self);
+    if ((db.staff?.length ?? 0) <= 1) throw new Error(STAFF_ERR.last_admin);
+    db.staff = db.staff?.filter((x) => x.id !== id); save(db);
+  },
   async listAppointments(from, to) {
     const db = load();
     return db.appointments.filter((a) => a.start >= from && a.start < to).map((a) => full(db, a)).sort((a, b) => a.start.localeCompare(b.start));

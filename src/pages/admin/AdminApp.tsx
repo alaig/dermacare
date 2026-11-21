@@ -68,13 +68,14 @@ function AdminLogin({ onDone }: { onDone: () => void }) {
         <img src="/logo.svg" alt="DermaCare" className="logo-big" />
         <form onSubmit={submit} className="card" style={{ padding: 20 }}>
           <h1 style={{ fontSize: 21, marginBottom: 16 }}>دخول الإدارة</h1>
-          <label className="field"><span>البريد الإلكتروني</span>
-            <input className="input ltr" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" />
+          <label className="field"><span>اسم المستخدم</span>
+            <input className="input ltr" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username"
+              autoCapitalize="none" autoCorrect="off" spellCheck={false} placeholder="username" />
           </label>
-          <label className="field"><span>كلمة المرور</span>
+          <label className="field"><span>كلمة السر</span>
             <input className="input ltr" type="password" value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="current-password" />
           </label>
-          {api.mode === 'demo' && <p className="hint" style={{ marginBottom: 10 }}>نسخة تجريبية: أي بريد، وكلمة المرور admin</p>}
+          {api.mode === 'demo' && <p className="hint" style={{ marginBottom: 10 }}>نسخة تجريبية: اسم المستخدم admin وكلمة السر admin</p>}
           {err && <p className="error">{err}</p>}
           <button className="btn dark block" disabled={busy}>{busy ? 'لحظة…' : 'دخول'}</button>
         </form>

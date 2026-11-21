@@ -2,7 +2,7 @@
 // and the schema in supabase/migrations.
 import { createClient } from '@supabase/supabase-js';
 import type { Api, Appointment, AppointmentFull, ApptStatus, Client, ClientWithStats, Message, Settings, Treatment } from './types';
-import { DEFAULT_SETTINGS } from './demo';
+import { DEFAULT_SETTINGS, STAFF_ERR } from './demo';
 import { toE164 } from './time';
 
 const url = import.meta.env.VITE_SUPABASE_URL as string;
@@ -49,6 +49,12 @@ const mapM = (r: any): Message => ({ id: r.id, clientId: r.client_id, title: r.t
 // Supabase needs a password of 6+ characters, so it is derived from the PIN and the phone.
 const clientPassword = (phone: string, pin: string) => `${pin}#dermacare#${phone}`;
 const TAKEN = 'هذا الرقم مسجّل في التطبيق. إذا كان رقمك، ادخلي برمزك السري أو تواصلي مع المركز';
+
+const staffOk = (r: { error: any }) => {
+  if (!r.error) return;
+  const code = Object.keys(STAFF_ERR).find((k) => r.error.message.includes(k));
+  throw new Error(code ? STAFF_ERR[code] : r.error.message);
+};
 
 const APPT_SELECT = '*, clients(*), treatments(*)';
 
@@ -143,9 +149,11 @@ export const liveApi: Api = {
     const r = await sb.rpc('is_admin');
     return r.data === true;
   },
-  async adminSignIn(email, password) {
+  async adminSignIn(login, password) {
+    const l = login.trim().toLowerCase();
+    const email = l.includes('@') ? l : `${l}@staff.dermacare.local`;
     const { error } = await sb.auth.signInWithPassword({ email, password });
-    if (error) throw new Error('بيانات الدخول غير صحيحة');
+    if (error) throw new Error('اسم المستخدم أو كلمة السر غير صحيحة');
     if (!(await liveApi.isAdmin())) { await sb.auth.signOut(); throw new Error('هذا الحساب ليس حساب إدارة'); }
   },
   async adminSignOut() { await sb.auth.signOut(); },
@@ -202,6 +210,14 @@ export const liveApi: Api = {
     const r = await sb.rpc('admin_reset_pin', { p_client: id, p_pin: pin });
     if (r.error) throw new Error(/no_account/.test(r.error.message) ? 'هذه الزبونة لم تسجّل في التطبيق بعد' : r.error.message);
   },
+  async listStaff() {
+    const rows = ok(await sb.rpc('admin_list_users')) as any[];
+    return rows.map((r) => ({ id: r.user_id, username: r.username, name: r.display_name, email: r.email, isMe: r.is_me }));
+  },
+  async createStaff(name, username, password) { staffOk(await sb.rpc('admin_create_user', { p_username: username, p_password: password, p_display: name })); },
+  async setStaffPassword(id, password) { staffOk(await sb.rpc('admin_set_password', { p_user: id, p_password: password })); },
+  async setStaffUsername(id, username) { staffOk(await sb.rpc('admin_set_username', { p_user: id, p_username: username })); },
+  async deleteStaff(id) { staffOk(await sb.rpc('admin_delete_user', { p_user: id })); },
   calendarFeedUrl(token) {
     return `${url.replace(/^https:/, 'webcal:')}/functions/v1/calendar-feed?token=${encodeURIComponent(token)}`;
   },

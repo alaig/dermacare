@@ -68,6 +68,14 @@ export interface ClientWithStats extends Client {
   nextAppt: string | null;
 }
 
+export interface Staff {
+  id: string;
+  username: string | null; // null = still signs in with an email
+  name: string | null;
+  email: string | null;
+  isMe: boolean;
+}
+
 export interface Interval {
   start: string;
   end: string;
@@ -97,7 +105,13 @@ export interface Api {
 
   // admin
   isAdmin(): Promise<boolean>;
-  adminSignIn(email: string, password: string): Promise<void>;
+  /** `login` is a username, or an email for accounts that don't have a username yet. */
+  adminSignIn(login: string, password: string): Promise<void>;
+  listStaff(): Promise<Staff[]>;
+  createStaff(name: string, username: string, password: string): Promise<void>;
+  setStaffPassword(id: string, password: string): Promise<void>;
+  setStaffUsername(id: string, username: string): Promise<void>;
+  deleteStaff(id: string): Promise<void>;
   adminSignOut(): Promise<void>;
   listAppointments(fromISO: string, toISO: string): Promise<AppointmentFull[]>;
   setAppointmentStatus(id: string, status: ApptStatus): Promise<void>;

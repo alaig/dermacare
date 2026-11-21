@@ -156,4 +156,4 @@ export function Switch({ checked, onChange, label }: { checked: boolean; onChang
   );
 }
 
-export const initials = (name: string) => name.trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('');
+export const initials = (name: string) => name.trim().split(/\s+/).filter((w) => /\p{L}/u.test(w)).map((w) => w[0]).slice(0, 2).join('');
