@@ -43,6 +43,7 @@ export default function ClientApp() {
     if (!loginTarget) return <Welcome onPick={setLoginTarget} />;
     return (
       <Login
+        settings={settings}
         onBack={() => setLoginTarget(null)}
         onDone={(c) => { setClient(c); navigate(loginTarget, { replace: true }); setLoginTarget(null); }}
       />

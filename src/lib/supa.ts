@@ -34,13 +34,18 @@ function sendError(msg: string) {
 }
 
 const mapT = (r: any): Treatment => ({ id: r.id, name: r.name, durationMin: r.duration_min, price: r.price, active: r.active });
-const mapC = (r: any): Client => ({ id: r.id, name: r.name, phone: r.phone, birthDate: r.birth_date ?? null, createdAt: r.created_at });
+const mapC = (r: any): Client => ({ id: r.id, name: r.name, phone: r.phone, birthDate: r.birth_date ?? null, approved: r.approved ?? true, createdAt: r.created_at });
 const mapA = (r: any): Appointment => ({
   id: r.id, clientId: r.client_id, treatmentId: r.treatment_id, start: r.start_at, end: r.end_at,
   status: r.status, prepaid: r.prepaid, createdAt: r.created_at,
 });
 const mapFull = (r: any): AppointmentFull => ({ ...mapA(r), client: mapC(r.clients), treatment: mapT(r.treatments) });
 const mapM = (r: any): Message => ({ id: r.id, clientId: r.client_id, title: r.title, body: r.body, createdAt: r.created_at, kind: r.kind ?? 'manual' });
+
+// Clients sign in with phone + 4-digit PIN. Supabase needs an email/password, so both are derived from the phone.
+const clientEmail = (phone: string) => `p${phone}@clients.dermacare.app`;
+const clientPassword = (phone: string, pin: string) => `${pin}#dermacare#${phone}`;
+const TAKEN = 'هذا الرقم مسجّل في التطبيق. إذا كان رقمك، ادخلي برمزك السري أو تواصلي مع المركز';
 
 const APPT_SELECT = '*, clients(*), treatments(*)';
 
@@ -81,6 +86,31 @@ export const liveApi: Api = {
     if (error) throw new Error(friendly(error.message));
     const row = ok(await sb.rpc('claim_client', { p_name: name, p_birth: birthDate }));
     return mapC(row);
+  },
+  async registerClient(name, phone, birthDate, pin) {
+    const { data, error } = await sb.auth.signUp({ email: clientEmail(phone), password: clientPassword(phone, pin) });
+    if (error) {
+      if (/already registered|already exists/i.test(error.message)) throw new Error(TAKEN);
+      throw new Error(error.message);
+    }
+    if (!data.session) throw new Error('يجب إيقاف "Confirm email" في إعدادات Supabase (Authentication → Email)');
+    const r = await sb.rpc('register_client', { p_name: name, p_birth: birthDate });
+    if (r.error) {
+      await sb.auth.signOut();
+      if (/phone_taken/.test(r.error.message)) throw new Error(TAKEN);
+      throw new Error(r.error.message);
+    }
+    return mapC(r.data);
+  },
+  async loginClient(phone, pin) {
+    const { error } = await sb.auth.signInWithPassword({ email: clientEmail(phone), password: clientPassword(phone, pin) });
+    if (error) {
+      if (/rate|too many/i.test(error.message)) throw new Error('محاولات كثيرة، انتظري قليلًا وحاولي مجددًا');
+      throw new Error('رقم الهاتف أو الرمز السري غير صحيح');
+    }
+    const c = await liveApi.currentClient();
+    if (!c) { await sb.auth.signOut(); throw new Error('لم نجد حسابًا بهذا الرقم'); }
+    return c;
   },
   async setMyBirthDate(date) { ok(await sb.rpc('set_my_birth_date', { p_birth: date })); },
   async signOut() { await sb.auth.signOut(); },
@@ -151,6 +181,12 @@ export const liveApi: Api = {
   },
   async setClientBirthDate(clientId, date) { ok(await sb.from('clients').update({ birth_date: date }).eq('id', clientId)); },
   async sendBirthdaysNow() { return (ok(await sb.rpc('admin_send_birthdays')) as number) ?? 0; },
+  async approveClient(id) { ok(await sb.rpc('admin_approve_client', { p_client: id })); },
+  async rejectClient(id) { ok(await sb.rpc('admin_reject_client', { p_client: id })); },
+  async resetPin(id, pin) {
+    const r = await sb.rpc('admin_reset_pin', { p_client: id, p_pin: pin });
+    if (r.error) throw new Error(/no_account/.test(r.error.message) ? 'هذه الزبونة لم تسجّل في التطبيق بعد' : r.error.message);
+  },
   calendarFeedUrl(token) {
     return `${url.replace(/^https:/, 'webcal:')}/functions/v1/calendar-feed?token=${encodeURIComponent(token)}`;
   },

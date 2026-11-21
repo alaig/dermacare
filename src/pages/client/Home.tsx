@@ -27,7 +27,7 @@ export default function Home() {
     return { appts, visits, msgs };
   });
   const nowIso = new Date().toISOString();
-  const next = data?.appts.find((a) => a.status === 'booked' && a.end > nowIso);
+  const next = data?.appts.find((a) => (a.status === 'booked' || a.status === 'pending') && a.end > nowIso);
   const firstName = client.name.split(' ')[0];
   const r = readIds();
   const latest = data?.msgs[0];
@@ -55,11 +55,19 @@ export default function Home() {
             <p className="hint" style={{ fontSize: 15 }}>هديتك منّا اليوم: <b style={{ color: '#fff' }}>{s.birthdayGift}</b></p>
           </div>
         )}
+        {!client.approved && (
+          <div className="card" style={{ marginBottom: 12, background: 'var(--warn-bg)', boxShadow: 'none' }}>
+            <b style={{ color: 'var(--warn)' }}>أهلًا بك في DermaCare 🌸</b>
+            <p className="hint" style={{ color: 'var(--warn)', marginTop: 4 }}>
+              حسابك جديد، لذلك سيتواصل معك المركز مرة واحدة لتأكيد حجزك الأول. بعدها تُؤكَّد حجوزاتك تلقائيًا.
+            </p>
+          </div>
+        )}
         {!client.birthDate && <BirthdayPrompt />}
 
         {next && (
           <div className="card hero" style={{ marginBottom: 12 }}>
-            <div className="label">موعدك القادم</div>
+            <div className="label">موعدك القادم{next.status === 'pending' ? ' · بانتظار تأكيد المركز' : ''}</div>
             <h2>{next.treatment.name}</h2>
             <div className="when">{fmtDate(next.start)} · الساعة {fmtTime(next.start)}</div>
             <CountdownView target={next.start} />

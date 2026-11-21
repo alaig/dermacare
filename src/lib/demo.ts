@@ -4,7 +4,7 @@ import type { Api, Appointment, AppointmentFull, Client, ClientWithStats, Messag
 import { addDays, startOfDay } from './time';
 import { BIRTHDAY_DEFAULTS, isBirthdayToday, renderGreeting, todayKey } from './birthday';
 
-const KEY = 'dermacare-demo-v2';
+const KEY = 'dermacare-demo-v3';
 const uid = () => Math.random().toString(36).slice(2, 10);
 
 interface DB {
@@ -14,6 +14,7 @@ interface DB {
   appointments: Appointment[];
   messages: Message[];
   session: { clientId: string | null; admin: boolean };
+  pins?: Record<string, string>; // phone -> pin
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -53,10 +54,10 @@ function seed(): DB {
     return todayKey(new Date(d.getFullYear() - yearsAgo, d.getMonth(), d.getDate()));
   };
   const clients: Client[] = [
-    { id: 'c1', name: 'رنا خوري', phone: '0521112233', birthDate: bd(29, 40), createdAt: addDays(now, -200).toISOString() },
-    { id: 'c2', name: 'ميس عثامنة', phone: '0542223344', birthDate: bd(34, 0), createdAt: addDays(now, -150).toISOString() },
-    { id: 'c3', name: 'لينا حداد', phone: '0503334455', birthDate: bd(25, 3), createdAt: addDays(now, -90).toISOString() },
-    { id: 'c4', name: 'سمر زعبي', phone: '0524445566', birthDate: null, createdAt: addDays(now, -30).toISOString() },
+    { id: 'c1', name: 'رنا خوري', phone: '0521112233', birthDate: bd(29, 40), approved: true, createdAt: addDays(now, -200).toISOString() },
+    { id: 'c2', name: 'ميس عثامنة', phone: '0542223344', birthDate: bd(34, 0), approved: true, createdAt: addDays(now, -150).toISOString() },
+    { id: 'c3', name: 'لينا حداد', phone: '0503334455', birthDate: bd(25, 3), approved: true, createdAt: addDays(now, -90).toISOString() },
+    { id: 'c4', name: 'سمر زعبي', phone: '0524445566', birthDate: null, approved: false, createdAt: addDays(now, -30).toISOString() },
   ];
   const appointments: Appointment[] = [];
   const mk = (clientId: string, treatmentId: string, dayOffset: number, hour: number, status: Appointment['status']) => {
@@ -75,12 +76,12 @@ function seed(): DB {
   mk('c1', 't1', 0, 16, 'booked');
   mk('c2', 't2', 1, 11, 'booked');
   mk('c3', 't3', 1, 14, 'booked');
-  mk('c4', 't5', 2, 10, 'booked');
+  mk('c4', 't5', 2, 10, 'pending');
   const messages: Message[] = [
     { id: uid(), clientId: null, title: 'أهلًا بك في تطبيق DermaCare', body: 'من هنا تحجزين موعدك، وتتابعين زياراتك، وتصلك رسائلنا أولًا بأول.', createdAt: addDays(now, -3).toISOString() },
     { id: uid(), clientId: null, title: 'تنبيه قبل جلسة الليزر', body: 'يُرجى حلاقة المنطقة قبل الجلسة بـ 24 ساعة، وتجنّب التعرض للشمس أسبوعًا قبلها.', createdAt: addDays(now, -1).toISOString() },
   ];
-  return { settings: DEFAULT_SETTINGS, treatments, clients, appointments, messages, session: { clientId: null, admin: false } };
+  return { settings: DEFAULT_SETTINGS, treatments, clients, appointments, messages, session: { clientId: null, admin: false }, pins: { '0521112233': '1111', '0542223344': '2222', '0503334455': '3333', '0524445566': '4444' } };
 }
 
 function load(): DB {
@@ -124,15 +125,15 @@ function full(db: DB, a: Appointment): AppointmentFull {
 
 function overlaps(db: DB, start: string, end: string) {
   const s = new Date(start).getTime(), e = new Date(end).getTime();
-  return db.appointments.some((a) => a.status === 'booked' && s < new Date(a.end).getTime() && e > new Date(a.start).getTime());
+  return db.appointments.some((a) => (a.status === 'booked' || a.status === 'pending') && s < new Date(a.end).getTime() && e > new Date(a.start).getTime());
 }
 
-function insertAppt(db: DB, clientId: string, treatmentId: string, startISO: string): Appointment {
+function insertAppt(db: DB, clientId: string, treatmentId: string, startISO: string, status: Appointment['status'] = 'booked'): Appointment {
   const t = db.treatments.find((x) => x.id === treatmentId);
   if (!t) throw new Error('العلاج غير موجود');
   const end = new Date(new Date(startISO).getTime() + t.durationMin * 60_000).toISOString();
   if (overlaps(db, startISO, end)) throw new Error('هذا الموعد لم يعد متاحًا، اختاري وقتًا آخر');
-  const a: Appointment = { id: uid(), clientId, treatmentId, start: startISO, end, status: 'booked', prepaid: false, createdAt: new Date().toISOString() };
+  const a: Appointment = { id: uid(), clientId, treatmentId, start: startISO, end, status, prepaid: false, createdAt: new Date().toISOString() };
   db.appointments.push(a);
   return a;
 }
@@ -143,7 +144,7 @@ export const demoApi: Api = {
   async listTreatments(all) { const db = load(); return all ? db.treatments : db.treatments.filter((t) => t.active); },
   async busyIntervals(from, to) {
     const db = load(); const f = new Date(from).getTime(), t = new Date(to).getTime();
-    return db.appointments.filter((a) => a.status === 'booked' && new Date(a.start).getTime() < t && new Date(a.end).getTime() > f).map((a) => ({ start: a.start, end: a.end }));
+    return db.appointments.filter((a) => (a.status === 'booked' || a.status === 'pending') && new Date(a.start).getTime() < t && new Date(a.end).getTime() > f).map((a) => ({ start: a.start, end: a.end }));
   },
 
   async currentClient() { const db = load(); return db.clients.find((c) => c.id === db.session.clientId) ?? null; },
@@ -153,8 +154,25 @@ export const demoApi: Api = {
     if (code !== '1234') throw new Error('الرمز غير صحيح');
     const db = load();
     let c = db.clients.find((x) => x.phone === phone);
-    if (!c) { c = { id: uid(), name, phone, birthDate, createdAt: new Date().toISOString() }; db.clients.push(c); }
+    if (!c) { c = { id: uid(), name, phone, birthDate, approved: false, createdAt: new Date().toISOString() }; db.clients.push(c); }
     else { if (name) c.name = name; if (birthDate) c.birthDate = birthDate; }
+    db.session.clientId = c.id; save(db); return c;
+  },
+  async registerClient(name, phone, birthDate, pin) {
+    await wait(300);
+    const db = load(); db.pins ??= {};
+    const existing = db.clients.find((x) => x.phone === phone);
+    if (existing && db.pins[phone]) throw new Error('هذا الرقم مسجّل في التطبيق. إذا كان رقمك، ادخلي برمزك السري أو تواصلي مع المركز');
+    let c = existing;
+    if (c) { c.approved = false; c.name = name; c.birthDate = birthDate; }
+    else { c = { id: uid(), name, phone, birthDate, approved: false, createdAt: new Date().toISOString() }; db.clients.push(c); }
+    db.pins[phone] = pin; db.session.clientId = c.id; save(db); return c;
+  },
+  async loginClient(phone, pin) {
+    await wait(300);
+    const db = load();
+    const c = db.clients.find((x) => x.phone === phone);
+    if (!c || db.pins?.[phone] !== pin) throw new Error('رقم الهاتف أو الرمز السري غير صحيح');
     db.session.clientId = c.id; save(db); return c;
   },
   async setMyBirthDate(date) {
@@ -164,7 +182,8 @@ export const demoApi: Api = {
   async signOut() { const db = load(); db.session.clientId = null; save(db); },
   async book(treatmentId, startISO) {
     const db = load(); if (!db.session.clientId) throw new Error('يجب تسجيل الدخول');
-    const a = insertAppt(db, db.session.clientId, treatmentId, startISO); save(db); return a;
+    const me = db.clients.find((x) => x.id === db.session.clientId);
+    const a = insertAppt(db, db.session.clientId, treatmentId, startISO, me?.approved ? 'booked' : 'pending'); save(db); return a;
   },
   async myAppointments() {
     const db = load();
@@ -197,7 +216,7 @@ export const demoApi: Api = {
   async adminBook(name, phone, treatmentId, startISO) {
     const db = load();
     let c = db.clients.find((x) => x.phone === phone);
-    if (!c) { c = { id: uid(), name, phone, birthDate: null, createdAt: new Date().toISOString() }; db.clients.push(c); }
+    if (!c) { c = { id: uid(), name, phone, birthDate: null, approved: true, createdAt: new Date().toISOString() }; db.clients.push(c); }
     insertAppt(db, c.id, treatmentId, startISO); save(db);
   },
   async listClients(): Promise<ClientWithStats[]> {
@@ -223,6 +242,22 @@ export const demoApi: Api = {
     if (c) c.birthDate = date; save(db);
   },
   async sendBirthdaysNow() { return runBirthdays(load()); },
+  async approveClient(id) {
+    const db = load(); const c = db.clients.find((x) => x.id === id); if (c) c.approved = true;
+    db.appointments.forEach((a) => { if (a.clientId === id && a.status === 'pending') a.status = 'booked'; }); save(db);
+  },
+  async rejectClient(id) {
+    const db = load(); const c = db.clients.find((x) => x.id === id); if (!c) return;
+    if (db.pins) delete db.pins[c.phone];
+    db.clients = db.clients.filter((x) => x.id !== id);
+    db.appointments = db.appointments.filter((a) => a.clientId !== id);
+    if (db.session.clientId === id) db.session.clientId = null;
+    save(db);
+  },
+  async resetPin(id, pin) {
+    const db = load(); const c = db.clients.find((x) => x.id === id); if (!c) return;
+    db.pins ??= {}; db.pins[c.phone] = pin; save(db);
+  },
   calendarFeedUrl() { return ''; },
 };
 

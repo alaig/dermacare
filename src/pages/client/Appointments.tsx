@@ -7,6 +7,7 @@ import { useClient } from './ClientApp';
 import { CalendarButtons, PrepayButton } from './parts';
 
 const STATUS: Record<ApptStatus, [string, string]> = {
+  pending: ['بانتظار التأكيد', 'warn'],
   booked: ['محجوز', ''],
   completed: ['تمّ', 'ok'],
   cancelled: ['ملغى', 'red'],
@@ -18,7 +19,7 @@ export default function Appointments() {
   const toast = useToast();
   const { data, reload } = useLoad(() => api.myAppointments());
   const nowIso = new Date().toISOString();
-  const upcoming = data?.filter((a) => a.status === 'booked' && a.end > nowIso) ?? [];
+  const upcoming = data?.filter((a) => (a.status === 'booked' || a.status === 'pending') && a.end > nowIso) ?? [];
   const past = (data?.filter((a) => !upcoming.includes(a)) ?? []).reverse();
   const visits = data?.filter((a) => a.status === 'completed').length ?? 0;
 
@@ -46,6 +47,7 @@ export default function Appointments() {
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 700 }}>{a.treatment.name}</div>
               <div className="hint">{a.treatment.durationMin} دقيقة</div>
+              {a.status === 'pending' && <span className="tag warn" style={{ marginTop: 4 }}>بانتظار تأكيد المركز</span>}
             </div>
           </div>
           <CalendarButtons a={a} s={s} />

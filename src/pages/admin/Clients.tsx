@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { Icon, Sheet, initials, useLoad, useToast } from '../../components/ui';
 import { fmtShortDate } from '../../lib/time';
@@ -7,19 +8,21 @@ import { whatsappUrl } from '../../lib/calendar';
 import type { ClientWithStats } from '../../lib/types';
 import { useAdmin } from './AdminApp';
 
-type Filter = 'all' | 'gift' | 'cycle' | 'idle' | 'bday';
+type Filter = 'all' | 'pending' | 'gift' | 'cycle' | 'idle' | 'bday';
 
 export default function Clients() {
   const { settings: s } = useAdmin();
   const { data, reload } = useLoad(() => api.listClients());
   const [q, setQ] = useState('');
-  const [f, setF] = useState<Filter>('all');
+  const [params] = useSearchParams();
+  const [f, setF] = useState<Filter>((params.get('f') as Filter) || 'all');
   const [sel, setSel] = useState<ClientWithStats | null>(null);
   const T = s.loyaltyTarget;
   const idleSince = new Date(Date.now() - 60 * 86_400_000).toISOString();
 
   const filters: [Filter, string, (c: ClientWithStats) => boolean][] = [
     ['all', 'الكل', () => true],
+    ['pending', '⏳ بانتظار التأكيد', (c) => !c.approved],
     ['gift', 'زيارتها القادمة هدية', (c) => c.visits % T === T - 1],
     ['cycle', `أكملت ${T}+`, (c) => c.visits >= T],
     ['bday', '🎂 عيد ميلاد خلال أسبوع', (c) => { const d = daysToBirthday(c.birthDate); return d !== null && d <= 7; }],
@@ -60,7 +63,7 @@ export default function Clients() {
                   </span>
                   <span className="progress" style={{ display: 'block', marginTop: 8 }}><i style={{ width: `${(inCycle / (T - 1)) * 100}%` }} /></span>
                 </span>
-                {inCycle === T - 1 ? <span className="tag gift">{Icon.gift}</span> : <span className="tag">{c.visits}</span>}
+                {!c.approved ? <span className="tag warn">جديدة</span> : inCycle === T - 1 ? <span className="tag gift">{Icon.gift}</span> : <span className="tag">{c.visits}</span>}
               </button>
             );
           })}
@@ -77,8 +80,10 @@ function ClientSheet({ c, onClose, onChanged }: { c: ClientWithStats | null; onC
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [birth, setBirth] = useState('');
+  const [newPin, setNewPin] = useState('');
+  const [sentPin, setSentPin] = useState('');
   const [lastId, setLastId] = useState<string | null>(null);
-  if (c && c.id !== lastId) { setLastId(c.id); setBirth(c.birthDate ?? ''); }
+  if (c && c.id !== lastId) { setLastId(c.id); setBirth(c.birthDate ?? ''); setSentPin(''); setNewPin(''); }
   if (!c) return null;
   const greeting = `${renderGreeting(s.birthdayTitle, c.name, s.birthdayGift)}\n${renderGreeting(s.birthdayBody, c.name, s.birthdayGift)}`;
   const saveBirth = async () => {
@@ -86,6 +91,17 @@ function ClientSheet({ c, onClose, onChanged }: { c: ClientWithStats | null; onC
     toast('تم حفظ تاريخ الميلاد'); onChanged(); onClose();
   };
   const T = s.loyaltyTarget;
+  const approve = async () => { await api.approveClient(c.id); toast('تم تأكيد الزبونة'); onChanged(); onClose(); };
+  const reject = async () => {
+    if (!confirm(`رفض تسجيل ${c.name}؟ سيُحذف التسجيل ويصبح الرقم متاحًا من جديد.`)) return;
+    await api.rejectClient(c.id); toast('تم رفض التسجيل'); onChanged(); onClose();
+  };
+  const savePin = async () => {
+    try {
+      await api.resetPin(c.id, newPin);
+      toast('تم تغيير الرمز السري'); setSentPin(newPin); setNewPin('');
+    } catch (e) { toast((e as Error).message); }
+  };
   const send = async (e: FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
@@ -101,6 +117,16 @@ function ClientSheet({ c, onClose, onChanged }: { c: ClientWithStats | null; onC
           <div className="hint" dir="ltr" style={{ textAlign: 'right' }}>{c.phone}</div>
         </div>
       </div>
+      {!c.approved && (
+        <div className="card" style={{ background: 'var(--warn-bg)', boxShadow: 'none', marginBottom: 12 }}>
+          <b style={{ color: 'var(--warn)' }}>تسجيل جديد بانتظار التأكيد</b>
+          <p className="hint" style={{ color: 'var(--warn)', margin: '4px 0 10px' }}>تواصلي معها مرة واحدة (واتساب أو اتصال) للتأكد أن الرقم لها.</p>
+          <div className="grid2">
+            <button className="btn dark sm" onClick={approve}>{Icon.check} تأكيد</button>
+            <button className="btn danger sm" onClick={reject}>رفض</button>
+          </div>
+        </div>
+      )}
       <div className="grid2" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
         <div className="stat"><b>{c.visits}</b><span>زيارات</span></div>
         <div className="stat"><b>{c.visits % T}/{T}</b><span>في الدورة الحالية</span></div>
@@ -120,6 +146,18 @@ function ClientSheet({ c, onClose, onChanged }: { c: ClientWithStats | null; onC
           🎂 معايدة عبر واتساب
         </a>
       )}
+      <div className="section-title">الرمز السري</div>
+      <div className="row">
+        <input className="input otp" style={{ flex: 2, fontSize: 18, letterSpacing: 8 }} inputMode="numeric" placeholder="4 أرقام جديدة"
+          value={newPin} onChange={(e) => setNewPin(e.target.value.replace(/\D/g, '').slice(0, 4))} />
+        <button className="btn soft" disabled={newPin.length !== 4} onClick={savePin}>تغيير</button>
+      </div>
+      {sentPin ? (
+        <a className="btn primary block" style={{ marginTop: 8 }} target="_blank" rel="noreferrer"
+          href={whatsappUrl('972' + c.phone.slice(1), `مرحبًا ${c.name.split(' ')[0]}، رمزك السري الجديد لتطبيق ${s.centerName} هو: ${sentPin}`)}>
+          {Icon.whatsapp} أرسلي الرمز الجديد لها
+        </a>
+      ) : <p className="hint" style={{ marginTop: 6 }}>للزبونة التي نسيت رمزها. بعد التغيير تظهر إمكانية إرساله لها بواتساب.</p>}
       <form onSubmit={send} style={{ marginTop: 18 }}>
         <div className="section-title" style={{ marginTop: 0 }}>رسالة خاصة داخل التطبيق</div>
         <input className="input" placeholder="العنوان" value={title} onChange={(e) => setTitle(e.target.value)} style={{ marginBottom: 8 }} />

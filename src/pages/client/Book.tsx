@@ -33,9 +33,14 @@ export default function Book() {
         <div style={{ width: 76, height: 76, borderRadius: '50%', background: 'var(--coral)', color: '#fff', display: 'grid', placeItems: 'center', margin: '0 auto 16px' }}>
           <span style={{ width: 40, display: 'block' }}>{Icon.check}</span>
         </div>
-        <h1 className="page-title" style={{ marginBottom: 4 }}>تم الحجز!</h1>
+        <h1 className="page-title" style={{ marginBottom: 4 }}>{done.status === 'pending' ? 'وصل طلب الحجز!' : 'تم الحجز!'}</h1>
         <p className="hint" style={{ fontSize: 15 }}>{done.treatment.name}</p>
         <p style={{ fontWeight: 700, fontSize: 17, margin: '4px 0 20px' }}>{fmtDate(done.start)} · {fmtTime(done.start)}</p>
+        {done.status === 'pending' && (
+          <div className="card" style={{ background: 'var(--warn-bg)', boxShadow: 'none', textAlign: 'start', marginBottom: 12 }}>
+            <p className="hint" style={{ color: 'var(--warn)' }}>الموعد محجوز لك. لأنه أول حجز، سيتواصل معك المركز قريبًا لتأكيده.</p>
+          </div>
+        )}
         <div className="card" style={{ textAlign: 'start', display: 'grid', gap: 10 }}>
           <div style={{ fontWeight: 600 }}>أضيفي الموعد لتقويمك</div>
           <CalendarButtons a={done} s={s} />

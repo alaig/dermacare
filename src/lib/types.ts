@@ -31,10 +31,11 @@ export interface Client {
   name: string;
   phone: string;
   birthDate: string | null; // YYYY-MM-DD
+  approved: boolean; // confirmed once by the center
   createdAt: string;
 }
 
-export type ApptStatus = 'booked' | 'completed' | 'cancelled' | 'no_show';
+export type ApptStatus = 'pending' | 'booked' | 'completed' | 'cancelled' | 'no_show';
 
 export interface Appointment {
   id: string;
@@ -84,6 +85,8 @@ export interface Api {
   requestOtp(phone: string): Promise<void>;
   verifyOtp(phone: string, code: string, name: string, birthDate: string | null): Promise<Client>;
   setMyBirthDate(date: string): Promise<void>;
+  registerClient(name: string, phone: string, birthDate: string, pin: string): Promise<Client>;
+  loginClient(phone: string, pin: string): Promise<Client>;
   signOut(): Promise<void>;
   book(treatmentId: string, startISO: string): Promise<Appointment>;
   myAppointments(): Promise<AppointmentFull[]>;
@@ -108,5 +111,8 @@ export interface Api {
   saveTreatment(t: Treatment): Promise<void>;
   setClientBirthDate(clientId: string, date: string | null): Promise<void>;
   sendBirthdaysNow(): Promise<number>;
+  approveClient(clientId: string): Promise<void>;
+  rejectClient(clientId: string): Promise<void>;
+  resetPin(clientId: string, pin: string): Promise<void>;
   calendarFeedUrl(token: string): string;
 }
