@@ -25,7 +25,7 @@
   -webkit-tap-highlight-color: transparent;
 }
 * { box-sizing: border-box; }
-html, body { margin: 0; min-height: 100%; background: var(--blush); }
+html, body { margin: 0; min-height: 100%; background: var(--blush); overflow-x: hidden; }
 body { overscroll-behavior-y: none; }
 button, input, select, textarea { font: inherit; color: inherit; }
 a { color: inherit; }
@@ -74,7 +74,7 @@ h1, h2, h3, p { margin: 0; }
 /* forms */
 .field { display: block; margin-bottom: 14px; }
 .field > span { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
-.input { width: 100%; border: 1.5px solid var(--line); background: #fff; border-radius: 14px; padding: 13px 14px; font-size: 16px; outline: none; min-height: 48px; }
+.input { width: 100%; min-width: 0; border: 1.5px solid var(--line); background: #fff; border-radius: 14px; padding: 13px 14px; font-size: 16px; outline: none; min-height: 48px; }
 .input:focus { border-color: var(--rose); }
 .input.ltr { direction: ltr; text-align: right; }
 textarea.input { min-height: 96px; resize: vertical; }
@@ -176,7 +176,8 @@ textarea.input { min-height: 96px; resize: vertical; }
 .switch i::after { content: ''; position: absolute; top: 3px; inset-inline-start: 3px; width: 24px; height: 24px; background: #fff; border-radius: 50%; transition: .2s; box-shadow: 0 1px 3px rgba(0,0,0,.2); }
 .switch input:checked + i { background: var(--coral); }
 .switch input:checked + i::after { inset-inline-start: 23px; }
-.hours-row { display: grid; grid-template-columns: 72px 1fr 1fr 50px; gap: 8px; align-items: center; margin-bottom: 8px; }
+.hours-row { display: grid; grid-template-columns: 62px minmax(0,1fr) minmax(0,1fr) 50px; gap: 6px; align-items: center; margin-bottom: 8px; }
+.hours-row .input { min-width: 0; width: 100%; }
 .hours-row .input { padding: 8px; min-height: 40px; font-size: 14px; }
 .copy { direction: ltr; font-size: 12px; word-break: break-all; background: #fff; border-radius: 10px; padding: 10px; border: 1px dashed var(--line); }
 .btn svg, .tag svg, .avatar svg { width: 18px; height: 18px; flex: none; }

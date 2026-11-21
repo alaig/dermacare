@@ -260,6 +260,13 @@ export const demoApi: Api = {
     if (i >= 0) db.treatments[i] = t; else db.treatments.push({ ...t, id: t.id || uid() });
     save(db);
   },
+  async deleteTreatment(id) {
+    const db = load();
+    if (db.appointments.some((a) => a.treatmentId === id)) {
+      const t = db.treatments.find((x) => x.id === id); if (t) t.active = false; save(db); return 'hidden';
+    }
+    db.treatments = db.treatments.filter((x) => x.id !== id); save(db); return 'deleted';
+  },
   async setClientBirthDate(clientId, date) {
     const db = load(); const c = db.clients.find((x) => x.id === clientId);
     if (c) c.birthDate = date; save(db);

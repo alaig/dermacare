@@ -179,6 +179,15 @@ export const liveApi: Api = {
     if (t.id) ok(await sb.from('treatments').update(row).eq('id', t.id));
     else ok(await sb.from('treatments').insert(row));
   },
+  async deleteTreatment(id) {
+    const r = await sb.from('treatments').delete().eq('id', id);
+    if (!r.error) return 'deleted';
+    if (r.error.code === '23503' || /foreign key/i.test(r.error.message)) {
+      ok(await sb.from('treatments').update({ active: false }).eq('id', id));
+      return 'hidden';
+    }
+    throw new Error(r.error.message);
+  },
   async setClientBirthDate(clientId, date) { ok(await sb.from('clients').update({ birth_date: date }).eq('id', clientId)); },
   async sendBirthdaysNow() { return (ok(await sb.rpc('admin_send_birthdays')) as number) ?? 0; },
   async approveClient(id) { ok(await sb.rpc('admin_approve_client', { p_client: id })); },

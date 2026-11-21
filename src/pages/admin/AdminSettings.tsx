@@ -24,6 +24,13 @@ export default function AdminSettings() {
 
   const feed = api.calendarFeedUrl(s.calendarToken);
 
+  const removeT = async (t: Treatment) => {
+    if (!confirm(`إزالة "${t.name}"؟ لن تظهر للزبائن عند الحجز.`)) return;
+    const r = await api.deleteTreatment(t.id);
+    toast(r === 'deleted' ? 'تم حذف الخدمة' : 'أُزيلت الخدمة من الحجز (محفوظة في السجل بسبب مواعيد سابقة)');
+    reload();
+  };
+
   return (
     <>
       <h1 className="page-title">الإعدادات</h1>
@@ -111,18 +118,35 @@ export default function AdminSettings() {
         </div>
       )}
 
-      <div className="section-title">
-        العلاجات
-        <button className="btn soft sm" onClick={() => setEditT({ id: '', name: '', durationMin: 30, price: null, active: true })}>{Icon.plus} إضافة</button>
-      </div>
+      <div className="section-title">الخدمات والعلاجات</div>
+      <button className="btn primary block" style={{ marginBottom: 10 }} onClick={() => setEditT({ id: '', name: '', durationMin: 30, price: null, active: true })}>
+        {Icon.plus} خدمة جديدة
+      </button>
       <div className="list">
-        {treatments?.map((t) => (
-          <button key={t.id} className="item" style={{ width: '100%', border: 0, background: 'none', textAlign: 'start', cursor: 'pointer', opacity: t.active ? 1 : 0.5 }} onClick={() => setEditT(t)}>
-            <span className="grow"><span className="t" style={{ display: 'block' }}>{t.name}</span><span className="s">{t.durationMin} دقيقة{t.price != null ? ` · ₪${t.price}` : ''}</span></span>
-            {!t.active && <span className="tag">مخفي</span>}
-          </button>
+        {treatments?.filter((t) => t.active).map((t) => (
+          <div key={t.id} className="item" style={{ padding: '10px 12px 10px 16px' }}>
+            <button className="grow" style={{ border: 0, background: 'none', textAlign: 'start', cursor: 'pointer', padding: 0 }} onClick={() => setEditT(t)}>
+              <span className="t" style={{ display: 'block' }}>{t.name}</span>
+              <span className="s">{t.durationMin} دقيقة{t.price != null ? ` · ₪${t.price}` : ''} · اضغطي للتعديل</span>
+            </button>
+            <button className="btn danger sm" onClick={() => removeT(t)} aria-label={`إزالة ${t.name}`}>{Icon.trash} إزالة</button>
+          </div>
         ))}
+        {treatments && !treatments.some((t) => t.active) && <div className="empty">لا توجد خدمات. أضيفي خدمة جديدة.</div>}
       </div>
+      {treatments?.some((t) => !t.active) && (
+        <details style={{ marginTop: 10 }}>
+          <summary className="hint" style={{ cursor: 'pointer', padding: '6px 4px' }}>خدمات محذوفة ({treatments.filter((t) => !t.active).length})</summary>
+          <div className="list" style={{ marginTop: 6 }}>
+            {treatments.filter((t) => !t.active).map((t) => (
+              <div key={t.id} className="item" style={{ opacity: 0.75 }}>
+                <span className="grow"><span className="t" style={{ display: 'block' }}>{t.name}</span><span className="s">لا تظهر للحجز · محفوظة بسبب مواعيد سابقة</span></span>
+                <button className="btn soft sm" onClick={async () => { await api.saveTreatment({ ...t, active: true }); reload(); toast('أُعيدت الخدمة للحجز'); }}>إعادة</button>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
 
       <div className="section-title">التقويم</div>
       <div className="card">
@@ -158,15 +182,11 @@ function TreatmentSheet({ t, onClose, onSaved }: { t: Treatment | null; onClose:
   if (!t || !v) return null;
   return (
     <Sheet open onClose={onClose}>
-      <h2 style={{ fontSize: 19, marginBottom: 14 }}>{t.id ? 'تعديل علاج' : 'علاج جديد'}</h2>
-      <label className="field"><span>الاسم</span><input className="input" value={v.name} onChange={(e) => setV({ ...v, name: e.target.value })} /></label>
+      <h2 style={{ fontSize: 19, marginBottom: 14 }}>{t.id ? 'تعديل خدمة' : 'خدمة جديدة'}</h2>
+      <label className="field"><span>اسم الخدمة</span><input className="input" value={v.name} onChange={(e) => setV({ ...v, name: e.target.value })} placeholder="مثال: جلسة نضارة" autoFocus={!t.id} /></label>
       <div className="grid2">
         <label className="field"><span>المدة (دقائق)</span><input className="input" type="number" min={5} step={5} value={v.durationMin} onChange={(e) => setV({ ...v, durationMin: Number(e.target.value) || 30 })} /></label>
         <label className="field"><span>السعر ₪ (اختياري)</span><input className="input" type="number" min={0} value={v.price ?? ''} onChange={(e) => setV({ ...v, price: e.target.value === '' ? null : Number(e.target.value) })} /></label>
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-        <span style={{ flex: 1, fontWeight: 600 }}>ظاهر للحجز</span>
-        <Switch checked={v.active} onChange={(a) => setV({ ...v, active: a })} label="ظاهر للحجز" />
       </div>
       <button className="btn primary block" disabled={!v.name.trim()} onClick={async () => { await api.saveTreatment(v); onSaved(); }}>حفظ</button>
     </Sheet>

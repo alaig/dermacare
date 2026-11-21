@@ -109,6 +109,8 @@ export interface Api {
   deleteMessage(id: string): Promise<void>;
   saveSettings(s: Settings): Promise<void>;
   saveTreatment(t: Treatment): Promise<void>;
+  /** Deletes a service; one with appointment history is hidden instead. */
+  deleteTreatment(id: string): Promise<'deleted' | 'hidden'>;
   setClientBirthDate(clientId: string, date: string | null): Promise<void>;
   sendBirthdaysNow(): Promise<number>;
   approveClient(clientId: string): Promise<void>;

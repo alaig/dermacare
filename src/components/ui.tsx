@@ -8,6 +8,7 @@ const P = (d: ReactNode) => (
 );
 export const Icon = {
   chart: P(<><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></>),
+  trash: P(<><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></>),
   home: P(<><path d="M3 10.5 12 3l9 7.5" /><path d="M5 9.5V20h14V9.5" /><path d="M10 20v-5h4v5" /></>),
   plus: P(<><path d="M12 5v14M5 12h14" /></>),
   calendar: P(<><rect x="3" y="4.5" width="18" height="16" rx="3" /><path d="M3 9.5h18M8 3v3M16 3v3" /></>),
