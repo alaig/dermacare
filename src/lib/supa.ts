@@ -23,6 +23,14 @@ function friendly(msg: string) {
   return msg;
 }
 
+// Errors while *sending* the SMS: keep Twilio's reason visible so problems can be diagnosed.
+function sendError(msg: string) {
+  if (/rate limit|too many|seconds/i.test(msg)) return 'محاولات كثيرة، انتظري دقيقة وحاولي مجددًا';
+  if (/phone provider/i.test(msg)) return 'خدمة الرسائل غير مفعّلة حاليًا، تواصلي مع المركز للحجز';
+  if (/60200|invalid parameter `?to/i.test(msg)) return 'رقم الهاتف غير صالح، تأكدي منه';
+  return `تعذّر إرسال رسالة التحقق. (${msg})`;
+}
+
 const mapT = (r: any): Treatment => ({ id: r.id, name: r.name, durationMin: r.duration_min, price: r.price, active: r.active });
 const mapC = (r: any): Client => ({ id: r.id, name: r.name, phone: r.phone, createdAt: r.created_at });
 const mapA = (r: any): Appointment => ({
@@ -64,7 +72,7 @@ export const liveApi: Api = {
   },
   async requestOtp(phone) {
     const { error } = await sb.auth.signInWithOtp({ phone: toE164(phone) });
-    if (error) throw new Error(friendly(error.message));
+    if (error) throw new Error(sendError(error.message));
   },
   async verifyOtp(phone, code, name) {
     const { error } = await sb.auth.verifyOtp({ phone: toE164(phone), token: code, type: 'sms' });
