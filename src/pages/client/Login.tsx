@@ -9,8 +9,10 @@ import { Icon } from '../../components/ui';
 const pinOk = (p: string) => /^\d{4}$/.test(p);
 const onlyDigits = (v: string) => v.replace(/\D/g, '').slice(0, 4);
 
-export default function Login({ onDone, onBack, settings }: { onDone: (c: Client) => void; onBack?: () => void; settings: Settings }) {
-  const [mode, setMode] = useState<'register' | 'login'>('register');
+export default function Login({ onDone, onBack, settings, initialMode = 'register' }: {
+  onDone: (c: Client) => void; onBack?: () => void; settings: Settings; initialMode?: 'register' | 'login';
+}) {
+  const [mode, setMode] = useState<'register' | 'login'>(initialMode);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [birth, setBirth] = useState('');

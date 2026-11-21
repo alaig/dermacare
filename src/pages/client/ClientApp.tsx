@@ -44,6 +44,7 @@ export default function ClientApp() {
     return (
       <Login
         settings={settings}
+        initialMode={loginTarget === '/appointments' ? 'login' : 'register'}
         onBack={() => setLoginTarget(null)}
         onDone={(c) => { setClient(c); navigate(loginTarget, { replace: true }); setLoginTarget(null); }}
       />
