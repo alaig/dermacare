@@ -17,6 +17,8 @@ const ok = <T>(r: { data: T; error: any }): T => {
 
 function friendly(msg: string) {
   if (/no_overlap|conflicting key|exclusion/i.test(msg)) return 'هذا الموعد لم يعد متاحًا، اختاري وقتًا آخر';
+  if (/phone provider|sms/i.test(msg)) return 'خدمة الرسائل غير مفعّلة حاليًا، تواصلي مع المركز للحجز';
+  if (/rate limit|too many/i.test(msg)) return 'محاولات كثيرة، انتظري دقيقة وحاولي مجددًا';
   if (/token|otp/i.test(msg)) return 'الرمز غير صحيح أو انتهت صلاحيته';
   return msg;
 }
