@@ -1,11 +1,11 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { Icon, Sheet, initials, useLoad, useToast } from '../../components/ui';
-import { fmtShortDate } from '../../lib/time';
+import { DAY_NAMES, fmtShortDate, fmtTime } from '../../lib/time';
 import { BIRTH_MIN, birthMax, daysToBirthday, fmtBirthday, renderGreeting } from '../../lib/birthday';
 import { whatsappUrl } from '../../lib/calendar';
-import type { ClientWithStats } from '../../lib/types';
+import type { ApptStatus, ClientWithStats } from '../../lib/types';
 import { useAdmin } from './AdminApp';
 
 type Filter = 'all' | 'pending' | 'gift' | 'cycle' | 'idle' | 'bday';
@@ -17,6 +17,11 @@ export default function Clients() {
   const [params] = useSearchParams();
   const [f, setF] = useState<Filter>((params.get('f') as Filter) || 'all');
   const [sel, setSel] = useState<ClientWithStats | null>(null);
+  // /admin/clients?c=<id> opens that client's card directly (links from agenda and overview)
+  const openId = params.get('c');
+  useEffect(() => {
+    if (openId && data) { const c = data.find((x) => x.id === openId); if (c) setSel(c); }
+  }, [openId, data]);
   const T = s.loyaltyTarget;
   const idleSince = new Date(Date.now() - 60 * 86_400_000).toISOString();
 
@@ -80,6 +85,7 @@ function ClientSheet({ c, onClose, onChanged }: { c: ClientWithStats | null; onC
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [birth, setBirth] = useState('');
+  const { data: appts, reload: reloadAppts } = useLoad(() => (c ? api.clientAppointments(c.id) : Promise.resolve([])), [c?.id]);
   const [newPin, setNewPin] = useState('');
   const [sentPin, setSentPin] = useState('');
   const [lastId, setLastId] = useState<string | null>(null);
@@ -136,6 +142,8 @@ function ClientSheet({ c, onClose, onChanged }: { c: ClientWithStats | null; onC
         <a className="btn ghost" href={`tel:${c.phone}`}>{Icon.phone} اتصال</a>
         <a className="btn ghost" href={whatsappUrl('972' + c.phone.slice(1))} target="_blank" rel="noreferrer" style={{ color: '#1f9d55' }}>{Icon.whatsapp} واتساب</a>
       </div>
+      <ClientAppointments appts={appts} onChanged={() => { reloadAppts(); onChanged(); }} />
+
       <div className="section-title">تاريخ الميلاد</div>
       <div className="row">
         <input className="input" type="date" value={birth} min={BIRTH_MIN} max={birthMax()} onChange={(e) => setBirth(e.target.value)} style={{ flex: 2 }} />
@@ -165,5 +173,52 @@ function ClientSheet({ c, onClose, onChanged }: { c: ClientWithStats | null; onC
         <button className="btn dark block" style={{ marginTop: 10 }} disabled={!title.trim()}>إرسال</button>
       </form>
     </Sheet>
+  );
+}
+
+const STATUS: Record<ApptStatus, [string, string]> = {
+  pending: ['بانتظار التأكيد', 'warn'],
+  booked: ['محجوز', ''],
+  completed: ['تمّ', 'ok'],
+  cancelled: ['ملغى', 'red'],
+  no_show: ['لم تحضر', 'warn'],
+};
+
+/** All of one client's appointments: upcoming first, then her history. */
+function ClientAppointments({ appts, onChanged }: { appts: import('../../lib/types').AppointmentFull[] | null; onChanged: () => void }) {
+  const [showAll, setShowAll] = useState(false);
+  const [showAllUp, setShowAllUp] = useState(false);
+  const toast = useToast();
+  if (!appts) return <div className="hint" style={{ padding: '12px 4px' }}>جارٍ تحميل المواعيد…</div>;
+  const nowIso = new Date().toISOString();
+  const upcoming = appts.filter((a) => (a.status === 'booked' || a.status === 'pending') && a.end > nowIso);
+  const past = appts.filter((a) => !upcoming.includes(a)).reverse();
+  const pastShown = showAll ? past : past.slice(0, 5);
+  const row = (a: (typeof appts)[number], actions: boolean) => (
+    <div className="item" key={a.id} style={{ padding: '10px 12px' }}>
+      <div className="time-pill" style={{ minWidth: 58, fontSize: 14 }}>{fmtTime(a.start)}<small>{DAY_NAMES[new Date(a.start).getDay()]} {fmtShortDate(a.start)}</small></div>
+      <div className="grow">
+        <div className="t" style={{ fontSize: 14.5 }}>{a.treatment.name}</div>
+        <div className="s">{a.treatment.durationMin} د{a.treatment.price ? ` · ₪${a.treatment.price}` : ''}{a.prepaid ? ' · مدفوع' : ''}</div>
+      </div>
+      {actions && a.status === 'booked' ? (
+        <button className="btn soft sm" onClick={async () => { if (!confirm(`إلغاء موعد ${a.treatment.name}؟`)) return; await api.setAppointmentStatus(a.id, 'cancelled'); toast('تم إلغاء الموعد'); onChanged(); }}>إلغاء</button>
+      ) : <span className={`tag ${STATUS[a.status][1]}`}>{STATUS[a.status][0]}</span>}
+    </div>
+  );
+  return (
+    <>
+      <div className="section-title">مواعيدها القادمة <span className="hint">{upcoming.length}</span></div>
+      {upcoming.length === 0 ? <div className="hint" style={{ padding: '0 4px' }}>لا توجد مواعيد قادمة</div>
+        : <div className="list">{(showAllUp ? upcoming : upcoming.slice(0, 6)).map((a) => row(a, true))}</div>}
+      {upcoming.length > 6 && <button className="btn sm" style={{ background: 'none', color: 'var(--coral-deep)', marginTop: 4 }} onClick={() => setShowAllUp(!showAllUp)}>{showAllUp ? 'عرض أقل' : `عرض كل المواعيد القادمة (${upcoming.length})`}</button>}
+      {past.length > 0 && (
+        <>
+          <div className="section-title">زياراتها السابقة <span className="hint">{past.length}</span></div>
+          <div className="list">{pastShown.map((a) => row(a, false))}</div>
+          {past.length > 5 && <button className="btn sm" style={{ background: 'none', color: 'var(--coral-deep)', marginTop: 4 }} onClick={() => setShowAll(!showAll)}>{showAll ? 'عرض أقل' : `عرض الكل (${past.length})`}</button>}
+        </>
+      )}
+    </>
   );
 }

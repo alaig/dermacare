@@ -234,6 +234,10 @@ export const demoApi: Api = {
     const db = load();
     return db.appointments.filter((a) => a.start >= from && a.start < to).map((a) => full(db, a)).sort((a, b) => a.start.localeCompare(b.start));
   },
+  async clientAppointments(clientId) {
+    const db = load();
+    return db.appointments.filter((a) => a.clientId === clientId).map((a) => full(db, a)).sort((a, b) => a.start.localeCompare(b.start));
+  },
   async setAppointmentStatus(id, status) { const db = load(); const a = db.appointments.find((x) => x.id === id); if (a) a.status = status; save(db); },
   async setPrepaid(id, prepaid) { const db = load(); const a = db.appointments.find((x) => x.id === id); if (a) a.prepaid = prepaid; save(db); },
   async adminBook(name, phone, treatmentId, startISO) {

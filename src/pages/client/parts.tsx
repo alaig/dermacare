@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Icon, Sheet, useToast } from '../../components/ui';
 import { downloadIcs, googleCalendarUrl, whatsappUrl } from '../../lib/calendar';
-import { enableReminders, isIOS, isStandalone, remindersOn } from '../../lib/pwa';
+import { enableReminders, inAppBrowser, isIOS, isStandalone, remindersOn } from '../../lib/pwa';
 import type { AppointmentFull, Settings } from '../../lib/types';
 import { fmtDate, fmtTime } from '../../lib/time';
 
@@ -71,7 +71,7 @@ export function InstallSheet({ open, onClose }: { open: boolean; onClose: () => 
   return (
     <Sheet open={open} onClose={onClose}>
       <h2 style={{ fontSize: 19, marginBottom: 8 }}>ثبّتي التطبيق على الشاشة الرئيسية</h2>
-      <p className="hint" style={{ marginBottom: 16 }}>على الآيفون، تصل التذكيرات فقط بعد إضافة التطبيق إلى الشاشة الرئيسية. خطوتان فقط:</p>
+      <p className="hint" style={{ marginBottom: 16 }}>على الآيفون، إضافة التطبيق إلى الشاشة الرئيسية تُبقيك مسجّلة دخول دائمًا وتتيح التذكيرات. خطوتان فقط:</p>
       <div className="list">
         <div className="item"><span className="avatar">1</span><div className="grow">اضغطي زر المشاركة <span style={{ display: 'inline-block', width: 18, verticalAlign: 'middle' }}>{Icon.share}</span> أسفل الشاشة</div></div>
         <div className="item"><span className="avatar">2</span><div className="grow">اختاري «إضافة إلى الشاشة الرئيسية»</div></div>
@@ -88,13 +88,23 @@ export function InstallBanner() {
     try { return localStorage.getItem('dc-install-hide') === '1'; } catch { return false; }
   });
   if (isStandalone() || hidden) return null;
+  if (inAppBrowser()) {
+    return (
+      <div className="card" style={{ background: 'var(--warn-bg)', boxShadow: 'none', marginBottom: 12 }}>
+        <b style={{ color: 'var(--warn)' }}>افتحي التطبيق في المتصفح</b>
+        <p className="hint" style={{ color: 'var(--warn)', marginTop: 4 }}>
+          فتحتِ الرابط من داخل تطبيق آخر، وهناك قد يُطلب منك الدخول كل مرة. اضغطي ⋯ في الأعلى واختاري «فتح في Safari» أو «فتح في Chrome».
+        </p>
+      </div>
+    );
+  }
   return (
     <>
-      <div className="card" style={{ display: 'flex', gap: 12, alignItems: 'center', background: 'var(--blush-2)' }}>
+      <div className="card" style={{ display: 'flex', gap: 12, alignItems: 'center', background: 'var(--blush-2)', marginBottom: 12 }}>
         <img src="/icons/icon-192.png" alt="" width={40} height={40} style={{ borderRadius: 10 }} />
         <div style={{ flex: 1 }}>
           <div style={{ fontWeight: 700 }}>DermaCare على شاشتك</div>
-          <div className="hint">افتحيه كتطبيق، بدون تحميل</div>
+          <div className="hint">ابقي مسجّلة دخول دائمًا، بدون تحميل</div>
         </div>
         <button className="btn dark sm" onClick={() => setOpen(true)}>كيف؟</button>
         <button className="btn sm" style={{ background: 'none', padding: 4, minHeight: 0 }} aria-label="إخفاء" onClick={() => { setHidden(true); try { localStorage.setItem('dc-install-hide', '1'); } catch { /* */ } }}>

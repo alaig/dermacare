@@ -278,6 +278,7 @@ function MonthCalendar({ y, m, appts, centerName }: { y: number; m: number; appt
 /* ---------------- next 7 days ---------------- */
 function WeekList({ appts, centerName }: { appts: AppointmentFull[] | null; centerName: string }) {
   const [all, setAll] = useState(false);
+  const [by, setBy] = useState<'day' | 'client'>('day');
   const LIMIT = 6;
   if (!appts) return <div className="hint" style={{ padding: 12 }}>جارٍ التحميل…</div>;
   if (!appts.length) return <div className="card empty">لا توجد مواعيد في الأيام السبعة القادمة</div>;
@@ -288,8 +289,64 @@ function WeekList({ appts, centerName }: { appts: AppointmentFull[] | null; cent
     groups.set(k, [...(groups.get(k) ?? []), a]);
   });
   const today = startOfDay(new Date());
+  const dayLabel = (iso: string) => {
+    const d = new Date(iso);
+    return sameDay(d, today) ? 'اليوم' : sameDay(d, addDays(today, 1)) ? 'غدًا' : DAY_NAMES[d.getDay()];
+  };
+  const toggle = (
+    <div className="chips" style={{ margin: '0 0 6px', padding: 0 }}>
+      <button className={`chip${by === 'day' ? ' on' : ''}`} onClick={() => setBy('day')}>حسب اليوم</button>
+      <button className={`chip${by === 'client' ? ' on' : ''}`} onClick={() => setBy('client')}>حسب الزبون</button>
+    </div>
+  );
+
+  if (by === 'client') {
+    const byClient = new Map<string, AppointmentFull[]>();
+    sorted.forEach((a) => byClient.set(a.clientId, [...(byClient.get(a.clientId) ?? []), a]));
+    const clients = [...byClient.values()].sort((a, b) => b.length - a.length || a[0].start.localeCompare(b[0].start));
+    const shown = all ? clients : clients.slice(0, LIMIT);
+    return (
+      <>
+        {toggle}
+        {shown.map((list) => {
+          const c = list[0].client;
+          const wa = whatsappUrl('972' + c.phone.slice(1), `مرحبًا ${c.name.split(' ')[0]}، تذكير بمواعيدك في ${centerName} هذا الأسبوع:\n` +
+            list.map((a) => `• ${a.treatment.name}: ${dayLabel(a.start)} ${fmtDate(a.start)} الساعة ${fmtTime(a.start)}`).join('\n'));
+          return (
+            <div className="card" key={c.id} style={{ padding: 14, marginBottom: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <Link to={`/admin/clients?c=${c.id}`} style={{ flex: 1, minWidth: 0, textDecoration: 'none' }}>
+                  <div style={{ fontWeight: 700 }}>{c.name} <span className="tag" style={{ marginInlineStart: 4 }}>{list.length} {list.length === 1 ? 'موعد' : 'مواعيد'}</span></div>
+                  <div className="hint" dir="ltr" style={{ textAlign: 'right' }}>{c.phone}</div>
+                </Link>
+                <a className="btn ghost sm" href={`tel:${c.phone}`} aria-label="اتصال" style={{ padding: '0 10px' }}>{Icon.phone}</a>
+                <a className="btn ghost sm" href={wa} target="_blank" rel="noreferrer" aria-label="واتساب" style={{ padding: '0 10px', color: '#1f9d55' }}>{Icon.whatsapp}</a>
+              </div>
+              <div style={{ display: 'grid', gap: 6, marginTop: 10 }}>
+                {list.map((a) => (
+                  <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--blush-2)', borderRadius: 12, padding: '8px 10px' }}>
+                    <div style={{ width: 74, flex: 'none', fontSize: 13 }}>
+                      <b style={{ display: 'block' }}>{dayLabel(a.start)}</b>
+                      <span className="hint" style={{ fontSize: 12 }}>{fmtTime(a.start)}</span>
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0, fontSize: 14 }}>{a.treatment.name}<span className="hint" style={{ fontSize: 12 }}> · {a.treatment.durationMin} د</span></div>
+                    {a.status !== 'booked' && <span className={`tag ${STATUS[a.status][1]}`}>{STATUS[a.status][0]}</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+        {clients.length > LIMIT && (
+          <button className="btn soft block" onClick={() => setAll(!all)}>{all ? 'عرض أقل' : `عرض كل الزبائن (${clients.length})`}</button>
+        )}
+      </>
+    );
+  }
+
   return (
     <>
+      {toggle}
       {[...groups.entries()].map(([k, list]) => {
         const d = new Date(k);
         const label = sameDay(d, today) ? 'اليوم' : sameDay(d, addDays(today, 1)) ? 'غدًا' : DAY_NAMES[d.getDay()];
@@ -319,7 +376,7 @@ function ApptRow({ a, centerName }: { a: AppointmentFull; centerName: string }) 
     <div className="item" style={{ alignItems: 'flex-start' }}>
       <div className="time-pill">{fmtTime(a.start)}<small>{a.treatment.durationMin} د</small></div>
       <div className="grow">
-        <div className="t">{a.client.name}</div>
+        <Link to={`/admin/clients?c=${a.clientId}`} className="t" style={{ display: 'block', textDecoration: 'none' }}>{a.client.name}</Link>
         <a href={`tel:${a.client.phone}`} className="s" dir="ltr" style={{ display: 'inline-block', textDecoration: 'none' }}>{a.client.phone}</a>
         <div className="s">{a.treatment.name}{a.treatment.price ? ` · ₪${a.treatment.price}` : ''}{a.prepaid ? ' · مدفوع مسبقًا' : ''}</div>
         <span className={`tag ${STATUS[a.status][1]}`} style={{ marginTop: 6 }}>{STATUS[a.status][0]}</span>

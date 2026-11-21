@@ -7,7 +7,10 @@ import { toE164 } from './time';
 
 const url = import.meta.env.VITE_SUPABASE_URL as string;
 const key = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
-export const sb = createClient(url, key, { auth: { persistSession: true, autoRefreshToken: true } });
+// Sessions persist until the user signs out: the refresh token is renewed automatically on every visit.
+export const sb = createClient(url, key, {
+  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false },
+});
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const ok = <T>(r: { data: T; error: any }): T => {
@@ -148,6 +151,9 @@ export const liveApi: Api = {
   async adminSignOut() { await sb.auth.signOut(); },
   async listAppointments(from, to) {
     return (ok(await sb.from('appointments').select(APPT_SELECT).gte('start_at', from).lt('start_at', to).order('start_at')) as any[]).map(mapFull);
+  },
+  async clientAppointments(clientId) {
+    return (ok(await sb.from('appointments').select(APPT_SELECT).eq('client_id', clientId).order('start_at')) as any[]).map(mapFull);
   },
   async setAppointmentStatus(id, status: ApptStatus) { ok(await sb.from('appointments').update({ status }).eq('id', id)); },
   async setPrepaid(id, prepaid) { ok(await sb.from('appointments').update({ prepaid }).eq('id', id)); },

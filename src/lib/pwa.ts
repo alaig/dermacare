@@ -7,6 +7,14 @@ export const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
 
 export const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 
+/** Ask the browser not to evict our storage (keeps the client signed in). Safe to call repeatedly. */
+export async function persistStorage() {
+  try { if (navigator.storage?.persist && !(await navigator.storage.persisted())) await navigator.storage.persist(); } catch { /* ignore */ }
+}
+
+/** Opened inside WhatsApp / Instagram / Facebook in-app browsers, which keep a separate, short-lived storage. */
+export const inAppBrowser = () => /FBAN|FBAV|Instagram|WhatsApp|Line\//i.test(navigator.userAgent);
+
 export function registerSW() {
   if ('serviceWorker' in navigator && import.meta.env.PROD) {
     window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));

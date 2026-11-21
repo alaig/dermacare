@@ -104,6 +104,7 @@ export interface Api {
   setPrepaid(id: string, prepaid: boolean): Promise<void>;
   adminBook(name: string, phone: string, treatmentId: string, startISO: string): Promise<void>;
   listClients(): Promise<ClientWithStats[]>;
+  clientAppointments(clientId: string): Promise<AppointmentFull[]>;
   listMessages(): Promise<Message[]>;
   sendMessage(m: Omit<Message, 'id' | 'createdAt'>): Promise<void>;
   deleteMessage(id: string): Promise<void>;

@@ -123,7 +123,7 @@ export default function Agenda() {
             <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
               <div className="time-pill">{fmtTime(a.start)}<small>{a.treatment.durationMin} د</small></div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 700 }}>{a.client.name}</div>
+                <Link to={`/admin/clients?c=${a.clientId}`} style={{ fontWeight: 700, display: 'block', textDecoration: 'none' }}>{a.client.name}</Link>
                 <div className="hint">{a.treatment.name}</div>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
                   <span className={`tag ${STATUS[a.status][1]}`}>{STATUS[a.status][0]}</span>

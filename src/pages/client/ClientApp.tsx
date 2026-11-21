@@ -3,7 +3,7 @@ import { Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api';
 import type { Client, Settings } from '../../lib/types';
 import { Icon, TabBar } from '../../components/ui';
-import { readIds } from '../../lib/pwa';
+import { persistStorage, readIds } from '../../lib/pwa';
 import Login from './Login';
 import Welcome from './Welcome';
 import Home from './Home';
@@ -36,7 +36,7 @@ export default function ClientApp() {
   const refreshUnread = () => {
     api.myMessages().then((ms) => { const r = readIds(); setUnread(ms.filter((m) => !r.has(m.id)).length); }).catch(() => {});
   };
-  useEffect(() => { if (client) refreshUnread(); }, [client]);
+  useEffect(() => { if (client) { refreshUnread(); persistStorage(); } }, [client]);
 
   if (client === undefined || !settings) return <div className="splash"><img src="/mark.svg" alt="" /></div>;
   if (!client) {

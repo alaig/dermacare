@@ -55,6 +55,7 @@ export default function Home() {
             <p className="hint" style={{ fontSize: 15 }}>هديتك منّا اليوم: <b style={{ color: '#fff' }}>{s.birthdayGift}</b></p>
           </div>
         )}
+        <InstallBanner />
         {!client.approved && (
           <div className="card" style={{ marginBottom: 12, background: 'var(--warn-bg)', boxShadow: 'none' }}>
             <b style={{ color: 'var(--warn)' }}>أهلًا بك في DermaCare 🌸</b>
@@ -104,7 +105,6 @@ export default function Home() {
         <div className="section-title">تواصلي معنا</div>
         <ContactRow s={s} text={next ? whatsappApptText(next) : ''} />
 
-        <div style={{ marginTop: 12 }}><InstallBanner /></div>
       </div>
     </>
   );
